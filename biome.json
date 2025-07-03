@@ -8,7 +8,7 @@
 	"files": {
 		"ignoreUnknown": false,
 		"ignore": ["src/routeTree.gen.ts"],
-		"include": ["src/*", ".vscode/*", "index.html", "vite.config.js"]
+		"include": ["src/*", ".vscode/*", "index.html", "vite.config.js", "package.json", "tsconfig.json", "vite.config.ts"]
 	},
 	"formatter": {
 		"enabled": true,
@@ -39,7 +39,7 @@
 	},
 	"json": {
 		"formatter": {
-			"trailingCommas": "all"
+			"trailingCommas": "none"
 		}
 	}
 }

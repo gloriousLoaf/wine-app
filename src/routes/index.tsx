@@ -63,11 +63,12 @@ function WineApp() {
 			<div
 				className="hero min-h-screen"
 				style={{
-					backgroundImage:
-						'url("https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?ixlib=rb-4.0.3&ixid=M3wxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8fA%3D%3D&auto=format&fit=crop&w=2070&q=80")',
+					background: `linear-gradient(rgba(0, 0, 0, 0.6), rgba(0, 0, 0, 0.6)), url('https://images.unsplash.com/photo-1510812431401-41d2bd2722f3?w=2070')`,
+					backgroundSize: "cover",
+					backgroundPosition: "center",
+					backgroundRepeat: "no-repeat",
 				}}
 			>
-				<div className="hero-overlay bg-opacity-60 bg-black" />
 				<div className="hero-content text-center text-neutral-content">
 					<div className="max-w-md">
 						<h1 className="mb-5 text-5xl font-bold">A Decade of Wine</h1>
@@ -180,7 +181,7 @@ function WineApp() {
 									<input type="radio" name="rating-1" className="mask mask-star-2 bg-orange-400" />
 									<input type="radio" name="rating-1" className="mask mask-star-2 bg-orange-400" />
 									<input type="radio" name="rating-1" className="mask mask-star-2 bg-orange-400" />
-									<input type="radio" name="rating-1" className="mask mask-star-2 bg-orange-400" checked />
+									<input type="radio" name="rating-1" className="mask mask-star-2 bg-orange-400" defaultChecked />
 								</div>
 								<p className="text-white/80">
 									Elegant with notes of blackberry, tobacco, and leather. A truly exceptional vintage.
@@ -209,7 +210,7 @@ function WineApp() {
 									<input type="radio" name="rating-2" className="mask mask-star-2 bg-orange-400" />
 									<input type="radio" name="rating-2" className="mask mask-star-2 bg-orange-400" />
 									<input type="radio" name="rating-2" className="mask mask-star-2 bg-orange-400" />
-									<input type="radio" name="rating-2" className="mask mask-star-2 bg-orange-400" checked />
+									<input type="radio" name="rating-2" className="mask mask-star-2 bg-orange-400" defaultChecked />
 									<input type="radio" name="rating-2" className="mask mask-star-2 bg-orange-400" />
 								</div>
 								<p className="text-white/80">
@@ -240,7 +241,7 @@ function WineApp() {
 									<input type="radio" name="rating-3" className="mask mask-star-2 bg-orange-400" />
 									<input type="radio" name="rating-3" className="mask mask-star-2 bg-orange-400" />
 									<input type="radio" name="rating-3" className="mask mask-star-2 bg-orange-400" />
-									<input type="radio" name="rating-3" className="mask mask-star-2 bg-orange-400" checked />
+									<input type="radio" name="rating-3" className="mask mask-star-2 bg-orange-400" defaultChecked />
 								</div>
 								<p className="text-white/80">
 									Bold and complex with rich dark fruit, vanilla, and a long, smooth finish.

@@ -1,0 +1,7 @@
+<svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg">
+  <!-- Circle outline - centered in 120x120 viewBox -->
+  <circle cx="60" cy="60" r="38" stroke="#025D5D" stroke-width="5" fill="none" />
+
+  <!-- Horizon line: extended right, nearly to the left edge -->
+  <line x1="16" y1="60" x2="116" y2="60" stroke="#C84F48" stroke-width="5" stroke-linecap="round" />
+</svg>

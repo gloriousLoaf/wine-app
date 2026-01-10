@@ -1,0 +1,97 @@
+.bar {
+  position: fixed;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  background: var(--background);
+  border: 1px solid var(--border);
+  padding: 0.5rem 1rem;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.1);
+  border-radius: 100px;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+}
+
+.container {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.searchInputWrapper {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  border-right: 1px solid var(--border);
+  padding-right: 1rem;
+}
+
+.searchInput {
+  border: none;
+  background: none;
+  outline: none;
+  color: var(--foreground);
+  width: 150px;
+}
+
+.iconBtn {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  color: var(--foreground);
+  background: none;
+  border: none;
+}
+
+.icon {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.dialog {
+  max-width: 400px;
+  border-radius: var(--radius);
+}
+
+.dialogHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.filterGroup {
+  margin-bottom: 1.5rem;
+}
+
+.filterGroup label {
+  display: block;
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-bottom: 0.5rem;
+  color: var(--muted-foreground);
+}
+
+.select {
+  width: 100%;
+  padding: 0.75rem;
+  background: var(--muted);
+  color: var(--foreground);
+  border: 1px solid var(--border);
+  outline: none;
+}
+
+.applyBtn {
+  width: 100%;
+  padding: 1rem;
+  background: var(--foreground);
+  color: var(--background);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-weight: 700;
+  margin-top: 1rem;
+  border: none;
+}

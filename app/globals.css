@@ -1,0 +1,102 @@
+:root {
+  --background: #ffffff;
+  --foreground: #111111;
+  --accent: #0070f3;
+  --muted: #f5f5f5;
+  --muted-foreground: #666666;
+  --border: #eaeaea;
+  --radius: 0px; /* Stark minimalist look */
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+}
+
+[data-theme='dark'] {
+  --background: #000000;
+  --foreground: #ffffff;
+  --accent: #3291ff;
+  --muted: #111111;
+  --muted-foreground: #a1a1a1;
+  --border: #333333;
+}
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+h1, h2, h3, h4 {
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+button {
+  cursor: pointer;
+  font: inherit;
+  background: none;
+  border: none;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+/* Grid layout */
+.wine-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 2rem;
+  padding: 2rem 0;
+}
+
+/* Dialog Reset */
+dialog {
+  border: 1px solid var(--border);
+  background: var(--background);
+  color: var(--foreground);
+  padding: 2rem;
+  max-width: 600px;
+  width: 90%;
+  margin: auto;
+}
+
+/* Page Header */
+.page-header {
+  padding: 4rem 0 2rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.page-header h1 {
+  font-size: 3rem;
+  margin-bottom: 0.5rem;
+}
+
+.page-header p {
+  color: var(--muted-foreground);
+  font-size: 1.2rem;
+}
+
+/* Loader */
+.loader {
+  display: flex;
+  justify-content: center;
+  padding: 4rem 2rem;
+  color: var(--muted-foreground);
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}

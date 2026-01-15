@@ -26,8 +26,8 @@ export default async function HomePage({
     <main>
       <header className="page-header">
         <div className="container">
-          <h1>Wine Collection</h1>
-          <p>A decade of notes and labels.</p>
+          <h1>Untitled Wine App</h1>
+          <p>Catalog of a former sommelier.</p>
         </div>
       </header>
 

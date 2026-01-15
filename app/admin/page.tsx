@@ -22,7 +22,7 @@ export default function AdminPage() {
         <div className="container">
             <div className={styles.adminPage}>
                 <h1>Admin: Add New Wine</h1>
-                <p>Enter the details below. Note: Image must manually be placed in <code>public/images/wines/</code> for now.</p>
+                <p>New wines will be uploaded directly to Vercel Blob storage.</p>
 
                 <form id="admin-form" action={handleSubmit} className={styles.form}>
                     <div className={styles.group}>
@@ -44,8 +44,8 @@ export default function AdminPage() {
                             <input type="text" name="vintage" required placeholder="e.g. 2014 or NV" />
                         </div>
                         <div className={styles.group}>
-                            <label>Image Filename</label>
-                            <input type="text" name="imageTitle" required placeholder="e.g. 2014_marthas_vineyard.jpg" />
+                            <label>Wine Label Image</label>
+                            <input type="file" name="imageFile" accept="image/*" required />
                         </div>
                         <div className={styles.group}>
                             <label>Country (Optional)</label>

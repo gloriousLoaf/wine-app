@@ -26,11 +26,23 @@ export default function FilterModule({ filters, currentFilters }: FilterModulePr
     const [isDarkMode, setIsDarkMode] = useState(false);
     const [searchValue, setSearchValue] = useState(currentFilters.search || '');
     const filterDialogRef = useRef<HTMLDialogElement>(null);
+    const searchInputRef = useRef<HTMLInputElement>(null);
+
+    // Expand/contract state
+    const [isExpanded, setIsExpanded] = useState(false);
 
     // Filter state
     const [country, setCountry] = useState(currentFilters.country || '');
     const [grape, setGrape] = useState(currentFilters.grape || '');
     const [vintage, setVintage] = useState(currentFilters.vintage || '');
+
+    // Sync external URL changes to internal filter state
+    useEffect(() => {
+        setCountry(currentFilters.country || '');
+        setGrape(currentFilters.grape || '');
+        setVintage(currentFilters.vintage || '');
+        setSearchValue(currentFilters.search || '');
+    }, [currentFilters]);
 
     const toggleTheme = () => {
         const newTheme = !isDarkMode ? 'dark' : 'light';
@@ -52,6 +64,14 @@ export default function FilterModule({ filters, currentFilters }: FilterModulePr
         closeFilters();
     };
 
+    const clearDialogFilters = () => {
+        setCountry('');
+        setGrape('');
+        setVintage('');
+        setSearchValue('');
+        router.push('/');
+    };
+
     // Debounced search update
     useEffect(() => {
         const timer = setTimeout(() => {
@@ -66,35 +86,47 @@ export default function FilterModule({ filters, currentFilters }: FilterModulePr
 
     return (
         <>
-            <div className={styles.bar}>
+            <div className={`${styles.bar} ${isExpanded || searchValue ? styles.expanded : styles.collapsed}`}>
                 <div className={styles.container}>
-                    <div className={styles.searchInputWrapper}>
-                        <svg className={styles.icon} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <div 
+                        className={styles.searchInputWrapper}
+                        onClick={() => {
+                            setIsExpanded(true);
+                            searchInputRef.current?.focus();
+                        }}
+                        onBlur={(e) => {
+                            if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                                if (!searchValue) setIsExpanded(false);
+                            }
+                        }}
+                    >
+                        <svg className={styles.searchIcon} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                         </svg>
                         <input
+                            ref={searchInputRef}
                             type="text"
                             placeholder="Search wines..."
                             className={styles.searchInput}
                             value={searchValue}
                             onChange={(e) => setSearchValue(e.target.value)}
+                            onFocus={() => setIsExpanded(true)}
                         />
                     </div>
 
-                    <button className={styles.iconBtn} onClick={openFilters}>
-                        <svg className={styles.icon} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <button className={styles.iconBtn} onClick={openFilters} aria-label="Open Filters">
+                        <svg className={styles.filterIcon} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
                         </svg>
-                        <span>Filter</span>
                     </button>
 
-                    <button className={styles.iconBtn} onClick={toggleTheme}>
+                    <button className={styles.iconBtn} onClick={toggleTheme} aria-label="Toggle Theme">
                         {isDarkMode ? (
-                            <svg className={styles.icon} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg className={styles.themeIcon} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364-6.364l-.707.707M6.343 17.657l-.707.707m12.728 0l-.707-.707M6.343 6.343l-.707-.707M12 5a7 7 0 100 14 7 7 0 000-14z" />
                             </svg>
                         ) : (
-                            <svg className={styles.icon} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg className={styles.themeIcon} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20.354 15.354A9 9 0 018.646 3.646 9.003 9.003 0 0012 21a9.003 9.003 0 008.354-5.646z" />
                             </svg>
                         )}
@@ -105,7 +137,7 @@ export default function FilterModule({ filters, currentFilters }: FilterModulePr
             <dialog ref={filterDialogRef} className={styles.dialog}>
                 <div className={styles.dialogHeader}>
                     <h2>Filters</h2>
-                    <button onClick={closeFilters} style={{ background: 'none', border: 'none', fontSize: '1.5rem' }}>×</button>
+                    <button onClick={closeFilters} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer' }}>×</button>
                 </div>
 
                 <div className={styles.filterGroup}>
@@ -144,7 +176,10 @@ export default function FilterModule({ filters, currentFilters }: FilterModulePr
                     </select>
                 </div>
 
-                <button className={styles.applyBtn} onClick={applyFilters}>Apply Filters</button>
+                <div className={styles.dialogActionRow}>
+                    <button className={styles.applyBtn} onClick={applyFilters}>Apply Filters</button>
+                    <button className={styles.clearDialogBtn} onClick={clearDialogFilters}>Clear filters</button>
+                </div>
             </dialog>
         </>
     );

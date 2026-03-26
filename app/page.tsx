@@ -2,6 +2,7 @@ import { getWines, getFilterMetadata, getTotalWinesCount, getBottleStats } from 
 import WineGrid from '../components/WineGrid';
 import FilterModule from '../components/FilterModule';
 import DashboardStats from '../components/DashboardStats';
+import ActiveFilters from '../components/ActiveFilters';
 
 export default async function HomePage({
   searchParams,
@@ -39,8 +40,10 @@ export default async function HomePage({
             vintages={filters.vintages}
             bottleStats={bottleStats}
           />
+          <ActiveFilters />
         </div>
       </header>
+
 
       <WineGrid initialWines={initialWines} filters={params} />
 

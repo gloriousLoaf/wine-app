@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import WineCard from './WineCard';
+import EmptyState from './EmptyState';
 import { useInView } from 'react-intersection-observer';
 
 interface Wine {
@@ -64,6 +65,16 @@ export default function WineGrid({ initialWines, filters }: WineGridProps) {
             loadMore();
         }
     }, [inView, hasMore, loadMore]);
+
+    const hasFilters = !!(filters.country || filters.grape || filters.vintage || filters.search);
+
+    if (wines.length === 0 && !hasMore) {
+        return (
+            <div className="container" style={{ paddingBottom: '6rem' }}>
+                <EmptyState hasFilters={hasFilters} />
+            </div>
+        );
+    }
 
     return (
         <div className="container">

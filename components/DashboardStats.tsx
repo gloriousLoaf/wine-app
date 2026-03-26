@@ -1,6 +1,8 @@
 'use client';
 
-import { useRef } from 'react';
+import { useRef, useCallback } from 'react';
+import Link from 'next/link';
+import { useSearchParams } from 'next/navigation';
 import styles from './DashboardStats.module.css';
 
 interface DashboardStatsProps {
@@ -18,9 +20,16 @@ export default function DashboardStats({
   vintages,
   bottleStats
 }: DashboardStatsProps) {
+  const searchParams = useSearchParams();
   const bottlesDialogRef = useRef<HTMLDialogElement>(null);
   const countriesDialogRef = useRef<HTMLDialogElement>(null);
   const grapesDialogRef = useRef<HTMLDialogElement>(null);
+
+  const createQueryString = useCallback((name: string, value: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set(name, value);
+    return params.toString();
+  }, [searchParams]);
 
   const formatDate = (isoString?: string) => {
     if (!isoString) return 'Unknown';
@@ -65,7 +74,17 @@ export default function DashboardStats({
 
           <h3 className={styles.subhead}>Vintages in Collection</h3>
           <div className={styles.listGrid}>
-            {vintages.map(v => <span key={v} className={styles.listItem}>{v}</span>)}
+            {vintages.map(v => (
+              <Link 
+                key={v} 
+                href={`/?${createQueryString('vintage', v)}`}
+ 
+                className={styles.listLink}
+                onClick={() => bottlesDialogRef.current?.close()}
+              >
+                {v}
+              </Link>
+            ))}
           </div>
         </div>
       </dialog>
@@ -78,7 +97,17 @@ export default function DashboardStats({
         </div>
         <div className={styles.dialogContent}>
           <div className={styles.listGrid}>
-            {countries.map(c => <span key={c} className={styles.listItem}>{c}</span>)}
+            {countries.map(c => (
+              <Link 
+                key={c} 
+                href={`/?${createQueryString('country', c)}`}
+ 
+                className={styles.listLink}
+                onClick={() => countriesDialogRef.current?.close()}
+              >
+                {c}
+              </Link>
+            ))}
           </div>
         </div>
       </dialog>
@@ -91,8 +120,19 @@ export default function DashboardStats({
         </div>
         <div className={styles.dialogContent}>
           <div className={styles.listGrid}>
-            {grapes.map(g => <span key={g} className={styles.listItem}>{g}</span>)}
+            {grapes.map(g => (
+              <Link 
+                key={g} 
+                href={`/?${createQueryString('grape', g)}`}
+ 
+                className={styles.listLink}
+                onClick={() => grapesDialogRef.current?.close()}
+              >
+                {g}
+              </Link>
+            ))}
           </div>
+
         </div>
       </dialog>
     </>

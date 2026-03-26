@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { addWine } from './actions';
 import styles from './Admin.module.css';
 
+import Link from 'next/link';
+
 export default function AdminPage() {
     const [status, setStatus] = useState<string | null>(null);
 
@@ -23,8 +25,17 @@ export default function AdminPage() {
     }
 
     return (
-        <div className="container">
-            <div className={styles.adminPage}>
+        <div className="container" style={{ padding: '2rem 1rem' }}>
+            <div className={styles.adminPage} style={{ margin: '0 auto' }}>
+                <div style={{ display: 'flex', gap: '1rem', marginBottom: '2rem' }}>
+                    <Link href="/" style={{ color: 'var(--muted-foreground)' }}>
+                        ← Back to Collection
+                    </Link>
+                    <span style={{ color: 'var(--border)' }}>|</span>
+                    <Link href="/admin/edit" style={{ color: 'var(--muted-foreground)' }}>
+                        Go to Edit Wines →
+                    </Link>
+                </div>
                 <h1>Admin: Add New Wine</h1>
                 <p>New wines will be uploaded directly to Vercel Blob storage.</p>
 

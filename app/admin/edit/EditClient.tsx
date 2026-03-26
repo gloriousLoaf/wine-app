@@ -113,7 +113,7 @@ function EditForm({ wine, password, countries, grapes }: { wine: Wine, password:
         <strong>{wine.producer}</strong> — {wine.title} ({wine.vintage})
       </div>
       
-      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr auto', gap: '1rem', alignItems: 'end' }}>
+      <div className={styles.editGrid}>
         <div className={styles.group}>
           <label>Country</label>
           <input 

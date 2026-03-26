@@ -15,9 +15,15 @@ export default async function AdminEditPage({
 
   return (
     <div className="container" style={{ padding: '2rem 1rem' }}>
-      <Link href="/admin" style={{ display: 'inline-block', marginBottom: '2rem', color: 'var(--muted-foreground)' }}>
-        ← Back to Add Wine
-      </Link>
+      <div style={{ display: 'flex', gap: '1rem', marginBottom: '2rem' }}>
+        <Link href="/" style={{ color: 'var(--muted-foreground)' }}>
+          ← Back to Collection
+        </Link>
+        <span style={{ color: 'var(--border)' }}>|</span>
+        <Link href="/admin" style={{ color: 'var(--muted-foreground)' }}>
+          Go to Add Wine →
+        </Link>
+      </div>
       <EditClient 
         wines={editableWines as any} 
         countries={filters.countries} 

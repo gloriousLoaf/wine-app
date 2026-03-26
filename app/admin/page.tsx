@@ -70,6 +70,12 @@ export default function AdminPage() {
                 </form>
 
                 {status && <p className={styles.status}>{status}</p>}
+
+                <div style={{ marginTop: '2rem', textAlign: 'center' }}>
+                    <a href="/admin/edit" style={{ color: 'var(--muted-foreground)', textDecoration: 'underline' }}>
+                        Need to fix mislabeled wines? Go to the Edit page
+                    </a>
+                </div>
             </div>
         </div>
     );

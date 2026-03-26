@@ -88,7 +88,10 @@ dialog {
 .page-header p {
   color: var(--muted-foreground);
   font-size: 1.2rem;
+  margin-bottom: 2rem;
 }
+
+/* Removed legacy dashboard styles */
 
 /* Loader */
 .loader {

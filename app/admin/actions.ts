@@ -4,6 +4,34 @@ import { db } from '../../lib/db';
 import { wines } from '../../lib/db/schema';
 import { revalidatePath } from 'next/cache';
 import { put } from '@vercel/blob';
+import { eq } from 'drizzle-orm';
+
+export async function editWineMetadata(formData: FormData) {
+  try {
+    const password = formData.get('password') as string;
+    if (password !== process.env.ADMIN_PASSWORD) {
+      return { success: false, message: 'Unauthorized: Incorrect password' };
+    }
+
+    const id = parseInt(formData.get('id') as string, 10);
+    const country = formData.get('country') as string || null;
+    const grape = formData.get('grape') as string || null;
+
+    if (isNaN(id)) {
+      return { success: false, message: 'Invalid wine ID' };
+    }
+
+    await db.update(wines)
+      .set({ country, grape })
+      .where(eq(wines.id, id));
+
+    revalidatePath('/');
+    return { success: true };
+  } catch (error: any) {
+    console.error('Failed to edit wine:', error);
+    return { success: false, message: error.message || 'An unknown error occurred.' };
+  }
+}
 
 export async function addWine(formData: FormData) {
   try {

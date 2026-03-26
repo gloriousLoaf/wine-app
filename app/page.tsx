@@ -1,6 +1,7 @@
-import { getWines, getFilterMetadata } from '../lib/db/repo';
+import { getWines, getFilterMetadata, getTotalWinesCount, getBottleStats } from '../lib/db/repo';
 import WineGrid from '../components/WineGrid';
 import FilterModule from '../components/FilterModule';
+import DashboardStats from '../components/DashboardStats';
 
 export default async function HomePage({
   searchParams,
@@ -21,6 +22,8 @@ export default async function HomePage({
     search: params.search,
   });
   const filters = await getFilterMetadata();
+  const totalWines = await getTotalWinesCount();
+  const bottleStats = await getBottleStats();
 
   return (
     <main>
@@ -28,6 +31,14 @@ export default async function HomePage({
         <div className="container">
           <h1>Wine Journal</h1>
           <p>Best name ever. Catalog of a former sommelier.</p>
+          
+          <DashboardStats 
+            totalWines={totalWines}
+            countries={filters.countries}
+            grapes={filters.grapes}
+            vintages={filters.vintages}
+            bottleStats={bottleStats}
+          />
         </div>
       </header>
 

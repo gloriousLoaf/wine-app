@@ -10,11 +10,15 @@ export default function AdminPage() {
     async function handleSubmit(formData: FormData) {
         setStatus('Uploading...');
         try {
-            await addWine(formData);
+            const result = await addWine(formData);
+            if (!result?.success) {
+                setStatus(`Error: ${result?.message || 'Upload failed'}`);
+                return;
+            }
             setStatus('Success! Wine added.');
             (document.getElementById('admin-form') as HTMLFormElement).reset();
         } catch (err) {
-            setStatus(`Error: ${err instanceof Error ? err.message : 'Upload failed'}`);
+            setStatus(`Error: ${err instanceof Error ? err.message : 'Upload failed exceptions'}`);
         }
     }
 

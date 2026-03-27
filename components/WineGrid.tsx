@@ -14,6 +14,7 @@ interface Wine {
     imagePath: string;
     country: string | null;
     grape: string | null;
+    isoCreatedAt: string;
 }
 
 interface WineGridProps {

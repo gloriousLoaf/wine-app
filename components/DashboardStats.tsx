@@ -64,6 +64,9 @@ export default function DashboardStats({
 
       {/* Bottles Dialog */}
       <dialog ref={bottlesDialogRef} className={styles.dialog}>
+        <div className="sr-only" tabIndex={0}>
+          Collection statistics dialog. Press Tab to browse collection data and vintages, or to reach the close button.
+        </div>
         <div className={styles.dialogHeader}>
           <h2>Collection Stats</h2>
           <button onClick={() => bottlesDialogRef.current?.close()} className={styles.closeBtn}>×</button>
@@ -91,6 +94,9 @@ export default function DashboardStats({
 
       {/* Countries Dialog */}
       <dialog ref={countriesDialogRef} className={styles.dialog}>
+        <div className="sr-only" tabIndex={0}>
+          Countries filter dialog. Press Tab to browse the list of countries, or to reach the close button.
+        </div>
         <div className={styles.dialogHeader}>
           <h2>Countries ({countries.length})</h2>
           <button onClick={() => countriesDialogRef.current?.close()} className={styles.closeBtn}>×</button>
@@ -114,6 +120,9 @@ export default function DashboardStats({
 
       {/* Varietals Dialog */}
       <dialog ref={grapesDialogRef} className={styles.dialog}>
+        <div className="sr-only" tabIndex={0}>
+          Varietals filter dialog. Press Tab to browse the list of grape varieties, or to reach the close button.
+        </div>
         <div className={styles.dialogHeader}>
           <h2>Varietals ({grapes.length})</h2>
           <button onClick={() => grapesDialogRef.current?.close()} className={styles.closeBtn}>×</button>

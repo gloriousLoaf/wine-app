@@ -74,6 +74,24 @@ dialog {
   margin: auto;
 }
 
+dialog::backdrop {
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(4px);
+}
+
+/* Screen Reader Only Utility */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border-width: 0;
+}
+
 /* Page Header */
 .page-header {
   padding: 4rem 0 2rem;
@@ -91,7 +109,18 @@ dialog {
   margin-bottom: 2rem;
 }
 
-/* Removed legacy dashboard styles */
+.page-header p a {
+  color: var(--foreground);
+  text-decoration: underline;
+  text-decoration-color: var(--border);
+  text-underline-offset: 4px;
+  transition: text-decoration-color 0.2s ease, color 0.2s ease;
+}
+
+.page-header p a:hover {
+  text-decoration-color: var(--foreground);
+  color: var(--foreground);
+}
 
 /* Loader */
 .loader {

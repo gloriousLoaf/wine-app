@@ -58,8 +58,11 @@ export default function WineCard({ wine }: WineCardProps) {
             </div>
 
             <dialog ref={dialogRef} className={styles.dialog}>
+                <div className="sr-only" tabIndex={0}>
+                    Wine details dialog for {wine.title}. Press Tab to navigate to the close button.
+                </div>
                 <div className={styles.dialogContent}>
-                    <button className={styles.closeBtn} onClick={closeDialog}>×</button>
+                    <button className={styles.closeBtn} onClick={closeDialog} aria-label="Close dialog">×</button>
                     <div className={styles.dialogGrid}>
                         <div className={styles.dialogImageContainer}>
                             <Image

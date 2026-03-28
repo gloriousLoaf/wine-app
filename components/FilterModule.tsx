@@ -135,9 +135,12 @@ export default function FilterModule({ filters, currentFilters }: FilterModulePr
             </div>
 
             <dialog ref={filterDialogRef} className={styles.dialog}>
+                <div className="sr-only" tabIndex={0}>
+                    Filter criteria dialog. Press Tab to access the filter options.
+                </div>
                 <div className={styles.dialogHeader}>
                     <h2>Filters</h2>
-                    <button onClick={closeFilters} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer' }}>×</button>
+                    <button onClick={closeFilters} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer' }} aria-label="Close filters">×</button>
                 </div>
 
                 <div className={styles.filterGroup}>

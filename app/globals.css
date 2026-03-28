@@ -55,13 +55,7 @@ a {
   padding: 0 1rem;
 }
 
-/* Grid layout */
-.wine-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: 2rem;
-  padding: 2rem 0;
-}
+
 
 /* Dialog Reset */
 dialog {
@@ -92,43 +86,4 @@ dialog::backdrop {
   border-width: 0;
 }
 
-/* Page Header */
-.page-header {
-  padding: 4rem 0 2rem;
-  border-bottom: 1px solid var(--border);
-}
 
-.page-header h1 {
-  font-size: 3rem;
-  margin-bottom: 0.5rem;
-}
-
-.page-header p {
-  color: var(--muted-foreground);
-  font-size: 1.2rem;
-  margin-bottom: 2rem;
-}
-
-.page-header p a {
-  color: var(--foreground);
-  text-decoration: underline;
-  text-decoration-color: var(--border);
-  text-underline-offset: 4px;
-  transition: text-decoration-color 0.2s ease, color 0.2s ease;
-}
-
-.page-header p a:hover {
-  text-decoration-color: var(--foreground);
-  color: var(--foreground);
-}
-
-/* Loader */
-.loader {
-  display: flex;
-  justify-content: center;
-  padding: 4rem 2rem;
-  color: var(--muted-foreground);
-  font-size: 0.9rem;
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-}

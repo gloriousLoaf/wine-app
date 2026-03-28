@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import WineCard from './WineCard';
 import EmptyState from './EmptyState';
 import { useInView } from 'react-intersection-observer';
+import styles from './WineGrid.module.css';
 
 interface Wine {
     id: number;
@@ -79,13 +80,13 @@ export default function WineGrid({ initialWines, filters }: WineGridProps) {
 
     return (
         <div className="container">
-            <div className="wine-grid">
+            <div className={styles.wineGrid}>
                 {wines.map((wine) => (
                     <WineCard key={wine.id} wine={wine} />
                 ))}
             </div>
             {hasMore && (
-                <div ref={ref} className="loader">
+                <div ref={ref} className={styles.loader}>
                     <p>Loading more...</p>
                 </div>
             )}

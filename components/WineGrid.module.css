@@ -1,0 +1,16 @@
+.wineGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 2rem;
+  padding: 2rem 0;
+}
+
+.loader {
+  display: flex;
+  justify-content: center;
+  padding: 4rem 2rem;
+  color: var(--muted-foreground);
+  font-size: 0.9rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+}

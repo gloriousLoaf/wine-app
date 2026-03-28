@@ -4,6 +4,7 @@ import FilterModule from '../components/FilterModule';
 import DashboardStats from '../components/DashboardStats';
 import ActiveFilters from '../components/ActiveFilters';
 import Link from 'next/link';
+import styles from './page.module.css';
 
 export default async function HomePage({
   searchParams,
@@ -29,10 +30,10 @@ export default async function HomePage({
 
   return (
     <main>
-      <header className="page-header">
+      <header className={styles.pageHeader}>
         <div className="container">
-          <h1>Wine Journal</h1>
-          <p>Catalog of a <Link target="_blank" rel="noopener noreferrer" href="https://metcalf.dev">former sommelier</Link>.</p>
+          <h1 className={styles.title}>Wine Journal</h1>
+          <p className={styles.subtitle}>Catalog of a <Link target="_blank" rel="noopener noreferrer" href="https://metcalf.dev">former sommelier</Link>.</p>
 
           <DashboardStats
             totalWines={totalWines}

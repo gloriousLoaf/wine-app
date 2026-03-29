@@ -95,7 +95,7 @@ export default function FilterModule({ filters, currentFilters }: FilterModulePr
                         className={styles.iconBtn} 
                         onClick={() => {
                             searchDialogRef.current?.showModal();
-                            requestAnimationFrame(() => searchInputRef.current?.focus());
+                            searchInputRef.current?.focus();
                         }} 
                         aria-label="Open Search"
                     >

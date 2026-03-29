@@ -27,9 +27,9 @@ export async function editWineMetadata(formData: FormData) {
 
     revalidatePath('/');
     return { success: true };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Failed to edit wine:', error);
-    return { success: false, message: error.message || 'An unknown error occurred.' };
+    return { success: false, message: error instanceof Error ? error.message : 'An unknown error occurred.' };
   }
 }
 
@@ -73,8 +73,8 @@ export async function addWine(formData: FormData) {
 
     revalidatePath('/');
     return { success: true };
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error('Failed to add wine:', error);
-    return { success: false, message: error.message || 'An unknown error occurred during upload.' };
+    return { success: false, message: error instanceof Error ? error.message : 'An unknown error occurred during upload.' };
   }
 }

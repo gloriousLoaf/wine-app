@@ -81,14 +81,14 @@ async function migrate() {
         console.log(`  ✅ [${successCount + failCount + skipCount + 1}/${localWines.length}] Migrated: ${wine.title}`);
         successCount++;
         migrated = true;
-      } catch (error: any) {
-        if (error.retryAfter) {
-          const wait = (error.retryAfter + 1) * 1000;
-          console.warn(`  ⏳ Rate limited. Waiting ${error.retryAfter + 1}s...`);
+      } catch (error: unknown) {
+        if (error !== null && typeof error === 'object' && 'retryAfter' in error && typeof (error as { retryAfter: number }).retryAfter === 'number') {
+          const wait = ((error as { retryAfter: number }).retryAfter + 1) * 1000;
+          console.warn(`  ⏳ Rate limited. Waiting ${(error as { retryAfter: number }).retryAfter + 1}s...`);
           await new Promise(resolve => setTimeout(resolve, wait));
           retryCount++;
         } else {
-          console.error(`  ❌ Failed to migrate ${wine.title}:`, error.message);
+          console.error(`  ❌ Failed to migrate ${wine.title}:`, error instanceof Error ? error.message : String(error));
           failCount++;
           break;
         }

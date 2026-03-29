@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 export default async function AdminEditPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string }>;
+  searchParams: Promise<{ search?: string; }>;
 }) {
   const params = await searchParams;
   const editableWines = await getWinesForEdit(params.search);
@@ -24,11 +24,11 @@ export default async function AdminEditPage({
           Go to Add Wine →
         </Link>
       </div>
-      <EditClient 
-        wines={editableWines as any} 
-        countries={filters.countries} 
-        grapes={filters.grapes} 
-        searchParam={params.search || ''} 
+      <EditClient
+        wines={editableWines}
+        countries={filters.countries}
+        grapes={filters.grapes}
+        searchParam={params.search || ''}
       />
     </div>
   );

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useTransition } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import styles from './FilterModule.module.css';
 
@@ -26,10 +26,9 @@ export default function FilterModule({ filters, currentFilters }: FilterModulePr
     const [isDarkMode, setIsDarkMode] = useState(false);
     const [searchValue, setSearchValue] = useState(currentFilters.search || '');
     const filterDialogRef = useRef<HTMLDialogElement>(null);
+    const searchDialogRef = useRef<HTMLDialogElement>(null);
     const searchInputRef = useRef<HTMLInputElement>(null);
-
-    // Expand/contract state
-    const [isExpanded, setIsExpanded] = useState(false);
+    const [isPending, startTransition] = useTransition();
 
     // Filter state
     const [country, setCountry] = useState(currentFilters.country || '');
@@ -37,12 +36,14 @@ export default function FilterModule({ filters, currentFilters }: FilterModulePr
     const [vintage, setVintage] = useState(currentFilters.vintage || '');
 
     // Sync external URL changes to internal filter state
-    useEffect(() => {
+    const [prevFilters, setPrevFilters] = useState(currentFilters);
+    if (currentFilters !== prevFilters) {
+        setPrevFilters(currentFilters);
         setCountry(currentFilters.country || '');
         setGrape(currentFilters.grape || '');
         setVintage(currentFilters.vintage || '');
         setSearchValue(currentFilters.search || '');
-    }, [currentFilters]);
+    }
 
     const toggleTheme = () => {
         const newTheme = !isDarkMode ? 'dark' : 'light';
@@ -76,9 +77,11 @@ export default function FilterModule({ filters, currentFilters }: FilterModulePr
     useEffect(() => {
         const timer = setTimeout(() => {
             if (searchValue !== (currentFilters.search || '')) {
-                const params = new URLSearchParams(searchParams.toString());
-                if (searchValue) params.set('search', searchValue); else params.delete('search');
-                router.push(`/?${params.toString()}`);
+                startTransition(() => {
+                    const params = new URLSearchParams(searchParams.toString());
+                    if (searchValue) params.set('search', searchValue); else params.delete('search');
+                    router.push(`/?${params.toString()}`);
+                });
             }
         }, 500);
         return () => clearTimeout(timer);
@@ -86,33 +89,21 @@ export default function FilterModule({ filters, currentFilters }: FilterModulePr
 
     return (
         <>
-            <div className={`${styles.bar} ${isExpanded || searchValue ? styles.expanded : styles.collapsed}`}>
+            <div className={styles.bar}>
                 <div className={styles.container}>
-                    <div 
-                        className={styles.searchInputWrapper}
+                    <button 
+                        className={styles.iconBtn} 
                         onClick={() => {
-                            setIsExpanded(true);
-                            searchInputRef.current?.focus();
-                        }}
-                        onBlur={(e) => {
-                            if (!e.currentTarget.contains(e.relatedTarget as Node)) {
-                                if (!searchValue) setIsExpanded(false);
-                            }
-                        }}
+                            searchDialogRef.current?.showModal();
+                            setTimeout(() => searchInputRef.current?.focus(), 10);
+                        }} 
+                        aria-label="Open Search"
                     >
+                        {searchValue && <span className={styles.activeIndicator} />}
                         <svg className={styles.searchIcon} fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
                         </svg>
-                        <input
-                            ref={searchInputRef}
-                            type="text"
-                            placeholder="Search wines..."
-                            className={styles.searchInput}
-                            value={searchValue}
-                            onChange={(e) => setSearchValue(e.target.value)}
-                            onFocus={() => setIsExpanded(true)}
-                        />
-                    </div>
+                    </button>
 
                     <button className={styles.iconBtn} onClick={openFilters} aria-label="Open Filters">
                         <svg className={styles.filterIcon} fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -133,6 +124,48 @@ export default function FilterModule({ filters, currentFilters }: FilterModulePr
                     </button>
                 </div>
             </div>
+
+            <dialog 
+                ref={searchDialogRef} 
+                className={styles.searchDialog}
+                onClose={() => { if (!searchValue) setSearchValue(''); }}
+            >
+                <div className="sr-only" tabIndex={0}>
+                    Search wines dialog. Press Tab to access the search input, or Escape to close.
+                </div>
+                <div className={styles.searchDialogContent}>
+                    {isPending ? (
+                        <svg className={`${styles.searchIcon} ${styles.spin}`} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                        </svg>
+                    ) : (
+                        <svg className={styles.searchIcon} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                        </svg>
+                    )}
+                    <input
+                        ref={searchInputRef}
+                        type="text"
+                        placeholder="Search wines..."
+                        className={styles.searchInput}
+                        value={searchValue}
+                        onChange={(e) => setSearchValue(e.target.value)}
+                        onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                                e.preventDefault();
+                                searchDialogRef.current?.close();
+                            }
+                        }}
+                    />
+                    <button 
+                        className={styles.closeSearchBtn} 
+                        onClick={() => searchDialogRef.current?.close()}
+                        aria-label="Close search"
+                    >
+                        ×
+                    </button>
+                </div>
+            </dialog>
 
             <dialog ref={filterDialogRef} className={styles.dialog}>
                 <div className="sr-only" tabIndex={0}>

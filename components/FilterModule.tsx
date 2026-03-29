@@ -95,7 +95,7 @@ export default function FilterModule({ filters, currentFilters }: FilterModulePr
                         className={styles.iconBtn} 
                         onClick={() => {
                             searchDialogRef.current?.showModal();
-                            setTimeout(() => searchInputRef.current?.focus(), 10);
+                            requestAnimationFrame(() => searchInputRef.current?.focus());
                         }} 
                         aria-label="Open Search"
                     >
@@ -146,6 +146,7 @@ export default function FilterModule({ filters, currentFilters }: FilterModulePr
                     <input
                         ref={searchInputRef}
                         type="text"
+                        autoFocus
                         placeholder="Search wines..."
                         className={styles.searchInput}
                         value={searchValue}

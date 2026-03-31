@@ -10,6 +10,7 @@ export const wines = sqliteTable('wines', {
   imagePath: text('image_path').notNull(),
   extImageUrl: text('ext_image_url'),
   isoCreatedAt: text('iso_created_at').notNull(),
+  datePosted: text('date_posted'),
   country: text('country'),
   grape: text('grape'),
   isFavorite: integer('is_favorite', { mode: 'boolean' }).default(false),

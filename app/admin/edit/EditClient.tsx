@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { editWineMetadata } from '../actions';
+import { editWineMetadata, deleteWine } from '../actions';
 import styles from '../Admin.module.css';
 
 interface Wine {
@@ -9,8 +9,10 @@ interface Wine {
   title: string;
   producer: string;
   vintage: string;
+  notes: string | null;
   country: string | null;
   grape: string | null;
+  datePosted: string | null;
 }
 
 interface EditClientProps {
@@ -77,8 +79,16 @@ export default function EditClient({ wines, countries, grapes, searchParam }: Ed
 function EditForm({ wine, password, countries, grapes }: { wine: Wine, password: string, countries: string[], grapes: string[] }) {
   const [status, setStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [errorMsg, setErrorMsg] = useState('');
+  
+  const [title, setTitle] = useState(wine.title || '');
+  const [producer, setProducer] = useState(wine.producer || '');
+  const [vintage, setVintage] = useState(wine.vintage || '');
+  const [notes, setNotes] = useState(wine.notes || '');
   const [country, setCountry] = useState(wine.country || '');
   const [grape, setGrape] = useState(wine.grape || '');
+
+  const initialDate = wine.datePosted ? wine.datePosted.substring(0, 16) : '';
+  const [datePosted, setDatePosted] = useState(initialDate);
 
   const handleSave = async () => {
     if (!password) {
@@ -91,29 +101,80 @@ function EditForm({ wine, password, countries, grapes }: { wine: Wine, password:
     const formData = new FormData();
     formData.append('id', wine.id.toString());
     formData.append('password', password);
+    formData.append('title', title);
+    formData.append('producer', producer);
+    formData.append('vintage', vintage);
+    formData.append('notes', notes);
     formData.append('country', country);
     formData.append('grape', grape);
+    
+    // Append the precision trailing zeroes for Turso/SQLite ISO sorting consistency
+    const finalDate = datePosted.length === 16 ? `${datePosted}:00.000Z` : datePosted;
+    formData.append('datePosted', finalDate);
 
     const result = await editWineMetadata(formData);
 
     if (result.success) {
       setStatus('saved');
       setTimeout(() => setStatus('idle'), 2000);
+      setErrorMsg('');
     } else {
       setErrorMsg(result.message || 'Failed to save');
       setStatus('error');
     }
   };
 
-  const isChanged = country !== (wine.country || '') || grape !== (wine.grape || '');
+  const handleDelete = async () => {
+    if (!password) {
+      setErrorMsg('Password required at top of page');
+      return;
+    }
+    if (!confirm(`Are you sure you want to PERMANENTLY delete "${wine.title}"?`)) return;
+
+    setStatus('saving');
+    const formData = new FormData();
+    formData.append('id', wine.id.toString());
+    formData.append('password', password);
+
+    const result = await deleteWine(formData);
+
+    if (result.success) {
+      window.location.reload();
+    } else {
+      setErrorMsg(result.message || 'Failed to delete');
+      setStatus('error');
+    }
+  };
+
+  const isChanged = 
+    title !== (wine.title || '') ||
+    producer !== (wine.producer || '') ||
+    vintage !== (wine.vintage || '') ||
+    notes !== (wine.notes || '') ||
+    country !== (wine.country || '') ||
+    grape !== (wine.grape || '') ||
+    datePosted !== initialDate;
 
   return (
-    <div style={{ padding: '1rem', border: '1px solid var(--border)', borderRadius: 'var(--radius)' }}>
-      <div style={{ marginBottom: '1rem' }}>
-        <strong>{wine.producer}</strong> — {wine.title} ({wine.vintage})
-      </div>
+    <div style={{ padding: '1.5rem', border: '1px solid var(--border)', borderRadius: 'var(--radius)' }}>
       
-      <div className={styles.editGrid}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '1rem', marginBottom: '1rem' }}>
+        <div className={styles.group}>
+          <label>Producer</label>
+          <input type="text" value={producer} onChange={e => setProducer(e.target.value)} />
+        </div>
+        <div className={styles.group}>
+          <label>Title</label>
+          <input type="text" value={title} onChange={e => setTitle(e.target.value)} />
+        </div>
+        <div className={styles.group}>
+          <label>Vintage</label>
+          <input type="text" value={vintage} onChange={e => setVintage(e.target.value)} />
+        </div>
+        <div className={styles.group}>
+          <label>Posting Time (Local HH:MM)</label>
+          <input type="datetime-local" value={datePosted} onChange={e => setDatePosted(e.target.value)} />
+        </div>
         <div className={styles.group}>
           <label>Country</label>
           <input 
@@ -122,14 +183,8 @@ function EditForm({ wine, password, countries, grapes }: { wine: Wine, password:
             value={country} 
             onChange={e => setCountry(e.target.value)} 
             placeholder="Type or select a country..."
-            style={{ padding: '0.75rem', border: '1px solid var(--border)', borderRadius: 'var(--radius)', background: 'var(--background)', color: 'var(--foreground)' }} 
           />
-          <datalist id="countries-list">
-            <option value="Unknown" />
-            {countries.map(c => <option key={c} value={c} />)}
-          </datalist>
         </div>
-        
         <div className={styles.group}>
           <label>Varietal</label>
           <input 
@@ -138,13 +193,28 @@ function EditForm({ wine, password, countries, grapes }: { wine: Wine, password:
             value={grape} 
             onChange={e => setGrape(e.target.value)} 
             placeholder="Type or select a grape..."
-            style={{ padding: '0.75rem', border: '1px solid var(--border)', borderRadius: 'var(--radius)', background: 'var(--background)', color: 'var(--foreground)' }} 
           />
-          <datalist id="grapes-list">
-            <option value="Unknown" />
-            {grapes.map(g => <option key={g} value={g} />)}
-          </datalist>
         </div>
+      </div>
+
+      <div className={styles.group} style={{ marginBottom: '1.5rem' }}>
+        <label>Tasting Notes</label>
+        <textarea 
+          rows={3} 
+          value={notes} 
+          onChange={e => setNotes(e.target.value)}
+          style={{ width: '100%', padding: '0.75rem', borderRadius: 'var(--radius)', border: '1px solid var(--border)', background: 'var(--background)', color: 'var(--foreground)' }}
+        />
+      </div>
+
+      <div style={{ display: 'flex', gap: '1rem', justifyContent: 'space-between', alignItems: 'center' }}>
+        <button 
+          onClick={handleDelete}
+          className={styles.submitBtn} 
+          style={{ width: 'auto', margin: 0, background: 'transparent', color: 'red', border: '1px solid currentColor' }}
+        >
+          {status === 'saving' ? 'Processing...' : 'Delete Entry'}
+        </button>
 
         <button 
           onClick={handleSave} 
@@ -158,11 +228,20 @@ function EditForm({ wine, password, countries, grapes }: { wine: Wine, password:
             color: status === 'saved' ? 'var(--background)' : '#fff'
           }}
         >
-          {status === 'saving' ? '...' : status === 'saved' ? 'Saved!' : 'Update'}
+          {status === 'saving' ? 'Saving...' : status === 'saved' ? 'Saved!' : 'Update Metadata'}
         </button>
       </div>
       
-      {status === 'error' && <p style={{ color: 'red', fontSize: '0.8rem', marginTop: '0.5rem' }}>{errorMsg}</p>}
+      {status === 'error' && <p style={{ color: 'red', fontSize: '0.8rem', marginTop: '1rem', textAlign: 'right' }}>{errorMsg}</p>}
+      
+      <datalist id="countries-list">
+        <option value="Unknown" />
+        {countries.map(c => <option key={c} value={c} />)}
+      </datalist>
+      <datalist id="grapes-list">
+        <option value="Unknown" />
+        {grapes.map(g => <option key={g} value={g} />)}
+      </datalist>
     </div>
   );
 }

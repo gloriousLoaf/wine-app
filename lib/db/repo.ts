@@ -34,7 +34,7 @@ export async function getWines({
 
   return db.query.wines.findMany({
     where: conditions.length > 0 ? and(...conditions) : undefined,
-    orderBy: [desc(wines.isoCreatedAt)],
+    orderBy: [desc(wines.datePosted)],
     limit,
     offset,
   });
@@ -65,8 +65,8 @@ export async function getTotalWinesCount() {
 
 export async function getBottleStats() {
   const result = await db.select({
-    earliest: sql<string>`min(${wines.isoCreatedAt})`,
-    latest: sql<string>`max(${wines.isoCreatedAt})`
+    earliest: sql<string>`min(${wines.datePosted})`,
+    latest: sql<string>`max(${wines.datePosted})`
   }).from(wines);
   
   return {
@@ -99,7 +99,7 @@ export async function getWinesForEdit(search?: string) {
 
   return db.query.wines.findMany({
     where: conditions.length > 0 ? and(...conditions) : undefined,
-    orderBy: [desc(wines.isoCreatedAt)],
+    orderBy: [desc(wines.datePosted)],
     limit: 50,
   });
 }

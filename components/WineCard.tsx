@@ -14,7 +14,7 @@ interface WineCardProps {
         imagePath: string;
         country: string | null;
         grape: string | null;
-        isoCreatedAt: string;
+        datePosted: string | null;
     };
 }
 
@@ -24,7 +24,8 @@ export default function WineCard({ wine }: WineCardProps) {
     const openDialog = () => dialogRef.current?.showModal();
     const closeDialog = () => dialogRef.current?.close();
 
-    const formatDate = (isoString: string) => {
+    const formatDate = (isoString: string | null) => {
+        if (!isoString) return '';
         return new Date(isoString).toLocaleDateString('en-US', {
             month: 'long',
             day: 'numeric',
@@ -53,7 +54,7 @@ export default function WineCard({ wine }: WineCardProps) {
                             {wine.notes}
                         </p>
                     )}
-                    <p className={styles.postDate}>{formatDate(wine.isoCreatedAt)}</p>
+                    <p className={styles.postDate}>{formatDate(wine.datePosted)}</p>
                 </div>
             </div>
 
@@ -76,7 +77,7 @@ export default function WineCard({ wine }: WineCardProps) {
                         <div className={styles.dialogText}>
                             <div className={styles.dialogHeaderRow}>
                                 <h2>{wine.title}</h2>
-                                <p className={styles.dialogPostDate}>Posted on {formatDate(wine.isoCreatedAt)}</p>
+                                <p className={styles.dialogPostDate}>Posted on {formatDate(wine.datePosted)}</p>
                             </div>
                             <p className={styles.dialogMeta}>
                                 {wine.vintage} · {wine.producer}

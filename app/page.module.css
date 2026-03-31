@@ -11,6 +11,13 @@
 .subtitle {
   color: var(--muted-foreground);
   font-size: 1.2rem;
+  margin-bottom: 0.5rem;
+}
+
+.timespan {
+  color: var(--muted-foreground);
+  font-size: 1rem;
+  font-style: italic;
   margin-bottom: 2rem;
 }
 

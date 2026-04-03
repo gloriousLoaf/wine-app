@@ -81,7 +81,7 @@ export default function DashboardStats({
               <Link 
                 key={v} 
                 href={`/?${createQueryString('vintage', v)}`}
- 
+                prefetch={false}
                 className={styles.listLink}
                 onClick={() => bottlesDialogRef.current?.close()}
               >
@@ -107,7 +107,7 @@ export default function DashboardStats({
               <Link 
                 key={c} 
                 href={`/?${createQueryString('country', c)}`}
- 
+                prefetch={false}
                 className={styles.listLink}
                 onClick={() => countriesDialogRef.current?.close()}
               >
@@ -133,7 +133,7 @@ export default function DashboardStats({
               <Link 
                 key={g} 
                 href={`/?${createQueryString('grape', g)}`}
- 
+                prefetch={false}
                 className={styles.listLink}
                 onClick={() => grapesDialogRef.current?.close()}
               >

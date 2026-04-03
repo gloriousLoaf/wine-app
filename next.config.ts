@@ -5,13 +5,10 @@ const nextConfig: NextConfig = {
     remotePatterns: [
       {
         protocol: 'https',
-        hostname: 'd2mvsg0ph94s7h.cloudfront.net',
-      },
-      {
-        protocol: 'https',
         hostname: '**.public.blob.vercel-storage.com',
       },
     ],
+    minimumCacheTTL: 31536000,
   },
   experimental: {
     serverActions: {

@@ -37,6 +37,10 @@ export async function getWines({
     orderBy: [desc(wines.datePosted)],
     limit,
     offset,
+  }).catch((e: unknown) => {
+    const err = e as { message?: string; code?: string; cause?: { message?: string; status?: number } };
+    console.error('[repo] getWines failed:', err.message, '| code:', err.code, '| cause:', err.cause?.message, '| status:', err.cause?.status);
+    throw e;
   });
 }
 

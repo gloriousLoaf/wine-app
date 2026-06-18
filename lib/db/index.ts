@@ -8,6 +8,8 @@ let _db: DatabaseType | undefined;
 
 function initDb(): DatabaseType {
   if (!_db) {
+    console.log('[db] url prefix:', process.env.TURSO_CONNECTION_URL?.slice(0, 15));
+    console.log('[db] token length:', process.env.TURSO_AUTH_TOKEN?.length ?? 0);
     _db = drizzle(
       createClient({
         url: process.env.TURSO_CONNECTION_URL!,

@@ -8,6 +8,8 @@ let _db: DatabaseType | undefined;
 
 function initDb(): DatabaseType {
   if (!_db) {
+    console.log('[db] TURSO_CONNECTION_URL:', process.env.TURSO_CONNECTION_URL ?? 'UNDEFINED');
+    console.log('[db] process.env keys:', Object.keys(process.env).join(', '));
     _db = drizzle(
       createClient({
         url: process.env.TURSO_CONNECTION_URL!,

@@ -2,129 +2,190 @@
 
 ## Context
 
-This app is currently deployed on Vercel (paid tier) with a `wine.metcalf.dev` subdomain served via Cloudflare DNS (CNAME to Vercel, DNS-only). The goal is to move hosting entirely to Cloudflare to eliminate the $20/month Vercel cost.
+This app was deployed on Vercel (paid tier) with a `wine.metcalf.dev` subdomain served via Cloudflare DNS (CNAME to Vercel, DNS-only). The goal is to move hosting entirely to Cloudflare to eliminate the $20/month Vercel cost.
 
-**Alternative considered:** Downgrading to Vercel free tier ("Hobby"). The bot-crawl issue that drove the upgrade has been patched. Free tier limits (100GB bandwidth, 500MB Blob storage, 1GB Blob transfer) are likely sufficient for this project's actual usage. This is worth trying first as a low-risk fallback.
+**Alternative considered:** Downgrading to Vercel free tier ("Hobby"). The bot-crawl issue that drove the upgrade has been patched. Free tier limits (100GB bandwidth, 500MB Blob storage, 1GB Blob transfer) are likely sufficient for actual usage. Worth trying first as a low-risk fallback.
 
 ---
 
-## Current Stack
+## Stack Changes
 
-| Layer | Current | Cloudflare Equivalent |
+| Layer | Before | After |
 |---|---|---|
-| Hosting | Vercel | Cloudflare Pages (via `@opennextjs/cloudflare`) |
-| Database | Turso (LibSQL/SQLite) | No change needed — already Workers-compatible |
+| Hosting | Vercel | Cloudflare Workers (via `@opennextjs/cloudflare`) |
+| Database | Turso (LibSQL/SQLite) | Turso (unchanged) — see D1 note below |
 | Image storage | Vercel Blob | Cloudflare R2 |
-| Analytics | `@vercel/analytics` | Cloudflare Web Analytics (free) or remove |
-| DNS | Cloudflare (CNAME to Vercel) | Cloudflare (direct, remove CNAME) |
+| Analytics | `@vercel/analytics` | Removed |
+| DNS | Cloudflare CNAME → Vercel | Cloudflare direct (Workers route) |
+
+### On Turso vs Cloudflare D1
+
+Cloudflare D1 is their native SQLite, bound directly to the Worker (no HTTP connection, no auth tokens). Drizzle supports it via `drizzle-orm/d1`. For a read-heavy personal app with no multi-region replication need, D1 is the simpler long-term choice. Migration would require exporting Turso data, creating a D1 binding, and swapping the Drizzle adapter. Worth doing if Turso compatibility issues persist.
 
 ---
 
 ## Compatibility Audit
 
-### No changes needed
+### No changes needed (confirmed)
 
 - **[app/api/wines/route.ts](app/api/wines/route.ts)** — uses only `NextRequest`/`NextResponse`, fully compatible
-- **[lib/db/index.ts](lib/db/index.ts)** — Turso/LibSQL client works in Cloudflare Workers edge environment
 - **All server and client components** — no Node.js runtime dependencies anywhere
 - **No middleware.ts** — nothing to worry about
 
-### Changes required
+### Changes made
 
-| File | Issue | Effort |
-|---|---|---|
-| [app/admin/actions.ts](app/admin/actions.ts) | `@vercel/blob` `put()` call for image uploads | Medium — swap for R2 via `@aws-sdk/client-s3` |
-| [app/layout.tsx](app/layout.tsx) | `@vercel/analytics` import and `<Analytics />` component | Trivial — delete or replace |
-| [next.config.ts](next.config.ts) | `remotePatterns` hostname `**.public.blob.vercel-storage.com` | Trivial — update to R2 public bucket URL |
+| File | Change |
+|---|---|
+| [app/admin/actions.ts](app/admin/actions.ts) | Replaced `@vercel/blob` with `@aws-sdk/client-s3` pointing at R2 |
+| [app/layout.tsx](app/layout.tsx) | Removed `@vercel/analytics` import and `<Analytics />` |
+| [next.config.ts](next.config.ts) | `remotePatterns` now reads `R2_PUBLIC_URL` from env; keeps Vercel Blob pattern during transition |
+| [lib/db/index.ts](lib/db/index.ts) | Lazy-init Proxy for db client (see gotchas); import changed to `@libsql/client/web` |
+
+### TODO before cancelling Vercel
+
+- [ ] **DNS cutover** — add `wine.metcalf.dev` as a custom domain on the Worker (Cloudflare dashboard → Workers & Pages → wine-app → Settings → Domains & Routes → Add Custom Domain). The Vercel CNAME can then be deleted.
+- [ ] **Remove Vercel Blob `remotePattern`** — delete the `**.public.blob.vercel-storage.com` entry from `next.config.ts` now that all images are on R2.
+- [ ] **Confirm auto-deploy** — there is no `.github/workflows/deploy.yml` yet. If the Cloudflare dashboard Git integration is working, verify a push to `main` triggers a deploy. If not, add the workflow from Step 6 below.
 
 ---
 
 ## Migration Checklist
 
-### 1. Set up Cloudflare Pages with `@opennextjs/cloudflare`
+### 1. Set up `@opennextjs/cloudflare` adapter
 
 ```bash
 npm install -D @opennextjs/cloudflare wrangler
 ```
 
-Add a `wrangler.jsonc` at the project root and configure `@opennextjs/cloudflare` as the build adapter. See the [OpenNext Cloudflare docs](https://opennext.js.org/cloudflare) for current setup instructions — this adapter has matured significantly and is the recommended approach for Next.js 15+ on Cloudflare.
+This deploys as a **Cloudflare Worker** (not Pages). The `wrangler.jsonc` uses `main` + `assets` binding — the Workers + Assets model. Do not set up a Cloudflare Pages project; use `npm run deploy` or GitHub Actions instead.
 
-> **Note:** Next.js must be `>=16.2.6` for `@opennextjs/cloudflare@1.19.x`. The app was bumped from 16.1.1 → 16.2.9 during this step.
+> **Note:** Next.js must be `>=16.2.6` for `@opennextjs/cloudflare@1.19.x`. Bumped from 16.1.1 → 16.2.9.
 
-> **TODO:** Update `compatibility_date` in `wrangler.jsonc` to the current date before deploying to production. The build warns if this value is stale — it controls which Cloudflare runtime features and fixes are available to the worker.
+> **TODO (done):** Update `compatibility_date` in `wrangler.jsonc` to deploy date. Set to `2026-06-17`.
 
-Test locally with:
-```bash
-npm run preview
+New scripts added to `package.json`:
+```json
+"build:worker": "opennextjs-cloudflare build",
+"preview":      "opennextjs-cloudflare build && wrangler dev",
+"deploy":       "opennextjs-cloudflare build && opennextjs-cloudflare deploy"
 ```
 
 ### 2. Create R2 bucket and swap image storage
 
-In the Cloudflare dashboard, create an R2 bucket (e.g. `wine-images`). Enable public access to get a public bucket URL.
+Create R2 bucket (`wine-images`), enable public access. Install `@aws-sdk/client-s3`.
 
-Install the S3 client:
+Update [app/admin/actions.ts](app/admin/actions.ts) to upload via `PutObjectCommand` to R2.
+
+New env vars:
+```env
+R2_ACCOUNT_ID        # hex segment from the S3 endpoint URL (before .r2.cloudflarestorage.com)
+R2_ACCESS_KEY_ID     # "Access Key ID" from R2 API token page
+R2_SECRET_ACCESS_KEY # "Secret Access Key" from R2 API token page
+R2_BUCKET_NAME       # wine-images
+R2_PUBLIC_URL        # https://pub-xxx.r2.dev (from bucket Settings > Public access)
+```
+
+> The "Token value" shown on R2 token creation is for Cloudflare's own API — ignore it. Use Access Key ID + Secret Access Key for the S3-compatible API.
+
+### 3. Migrate existing images to R2
+
+**Vercel Blob → R2** (1162 wines): fetches each Vercel Blob URL from the DB, uploads to R2, updates `imagePath` in Turso. Idempotent; safe to re-run.
+
 ```bash
-npm install @aws-sdk/client-s3
+npx tsx scripts/migrate-blob-to-r2.ts
 ```
 
-In [app/admin/actions.ts](app/admin/actions.ts), replace the `@vercel/blob` import and `put()` call with an R2 upload using `@aws-sdk/client-s3` pointed at your R2 endpoint.
+**CloudFront → R2** (6 wines from old Delectable scrape data): some wines had `imagePath` pointing to a CloudFront CDN. Same pattern — fetches, uploads, updates `imagePath`.
 
-New environment variables needed:
-```env
-R2_ACCOUNT_ID=your_cloudflare_account_id
-R2_ACCESS_KEY_ID=your_r2_access_key
-R2_SECRET_ACCESS_KEY=your_r2_secret_key
-R2_BUCKET_NAME=wine-images
-R2_PUBLIC_URL=https://your-bucket.your-account.r2.dev  # or custom domain
+```bash
+npx tsx scripts/migrate-cloudfront-to-r2.ts
 ```
 
-Remove from env:
-```env
-BLOB_READ_WRITE_TOKEN  # no longer needed
-```
+Both scripts skip wines already pointing to R2. Run them in sequence; failures are collected and printed as a summary at the end so you don't have to scroll.
 
-### 3. Migrate existing images from Vercel Blob to R2
-
-Write a one-time script to list all image URLs stored in the Turso database, fetch each from Vercel Blob, and re-upload to R2. Update the database records with the new R2 URLs.
+Once confirmed, remove the `**.public.blob.vercel-storage.com` entry from `next.config.ts` remotePatterns.
 
 ### 4. Remove `@vercel/analytics`
 
-In [app/layout.tsx](app/layout.tsx), delete the `Analytics` import and component. Optionally add Cloudflare Web Analytics — it's a single `<script>` tag, no npm package needed.
+Delete `Analytics` import and `<Analytics />` from [app/layout.tsx](app/layout.tsx). Uninstall `@vercel/analytics`.
 
-### 5. Update `next.config.ts`
+### 5. Set environment variables on the Worker
 
-Replace the `vercel-storage.com` entry in `remotePatterns` with your R2 public bucket hostname.
+**Do not rely on the Cloudflare dashboard Variables UI** — those variables were not reaching the Worker in testing (possibly a UI quirk vs. actual binding). Use `wrangler secret put` instead:
 
-### 6. Update DNS in Cloudflare
-
-Once the Cloudflare Pages project is live:
-- Delete the existing `wine` CNAME record pointing to Vercel
-- Cloudflare Pages will provide its own DNS records for the `wine.metcalf.dev` subdomain
-
-### 7. Set environment variables in Cloudflare dashboard
-
-```env
-TURSO_CONNECTION_URL=
-TURSO_AUTH_TOKEN=
-ADMIN_PASSWORD=
-R2_ACCOUNT_ID=
-R2_ACCESS_KEY_ID=
-R2_SECRET_ACCESS_KEY=
-R2_BUCKET_NAME=
-R2_PUBLIC_URL=
+```bash
+npx wrangler secret put TURSO_CONNECTION_URL --name wine-app
+npx wrangler secret put TURSO_AUTH_TOKEN --name wine-app
+npx wrangler secret put ADMIN_PASSWORD --name wine-app
+npx wrangler secret put R2_ACCOUNT_ID --name wine-app
+npx wrangler secret put R2_ACCESS_KEY_ID --name wine-app
+npx wrangler secret put R2_SECRET_ACCESS_KEY --name wine-app
+npx wrangler secret put R2_BUCKET_NAME --name wine-app
+npx wrangler secret put R2_PUBLIC_URL --name wine-app
 ```
+
+Secrets take effect immediately — no redeploy needed.
+
+### 6. Set up GitHub Actions for auto-deploy
+
+The Workers model does not have the same push-to-deploy Git integration as Cloudflare Pages. Use a GitHub Action instead:
+
+```yaml
+# .github/workflows/deploy.yml
+name: Deploy
+on:
+  push:
+    branches: [main]
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: npm run deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+```
+
+Add `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` as GitHub repository secrets.
+
+### 7. Update DNS in Cloudflare
+
+Once the Worker is confirmed working:
+- Delete the `wine` CNAME record pointing to Vercel
+- Add a route or custom domain on the Worker pointing to `wine.metcalf.dev`
+
+---
+
+## Gotchas Encountered
+
+### Workers vs Pages
+`@opennextjs/cloudflare` v1.x deploys to **Workers** (not Pages). The `wrangler.jsonc` uses `main` + `assets` binding. If you set up a Cloudflare Pages project via the dashboard, it will partially work (static assets) but 500 on all dynamic routes. Deploy via CLI or GitHub Actions.
+
+### Environment variables not reaching the Worker
+Variables set via the Cloudflare dashboard UI did not appear in `process.env` inside the Worker during testing — `populateProcessEnv()` in the adapter iterates `env` but received an empty object. Root cause unclear (possibly variables were on a deleted Pages project). Fix: use `wrangler secret put` to bind variables directly.
+
+### Lazy DB initialization required
+`lib/db/index.ts` originally created the libsql client at module load time. In Workers, `process.env` is populated by `populateProcessEnv()` on the first request — module-level code runs before this. Fix: wrapped the db in a lazy-init Proxy that defers `createClient()` until first use.
+
+### `@libsql/client` import
+Must import from `@libsql/client/web` (not `@libsql/client`) — the standard import uses the Node.js client which misbehaves with `nodejs_compat`. Cloudflare's own docs confirm this.
+
+### `@libsql/client` v0.17.0 bug
+v0.17.0 throws `Cannot read properties of null (reading 'has')` on query execution in the Workers runtime. Fixed by upgrading to v0.17.4.
+
+### `TURSO_CONNECTION_URL` scheme
+Must use `https://` (HTTP mode), not `libsql://` (WebSocket/Hrana). Change the scheme in the secret:
+`libsql://your-db.turso.io` → `https://your-db.turso.io`
 
 ---
 
 ## R2 Free Tier
 
-R2 is well within free tier for this project:
 - 10 GB storage
 - 1 million Class A operations/month (writes)
 - 10 million Class B operations/month (reads)
-
----
-
-## Effort Estimate
-
-This is a weekend project. The codebase has zero Node.js runtime dependencies and only one Vercel-specific integration (Blob storage). The `@opennextjs/cloudflare` adapter compatibility risk is low given the simplicity of the route handlers and server actions.

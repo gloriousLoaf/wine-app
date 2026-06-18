@@ -1,5 +1,5 @@
 import { drizzle } from 'drizzle-orm/libsql';
-import { createClient } from '@libsql/client';
+import { createClient } from '@libsql/client/web';
 import * as schema from './schema';
 
 export type DatabaseType = ReturnType<typeof drizzle<typeof schema>>;
@@ -8,8 +8,6 @@ let _db: DatabaseType | undefined;
 
 function initDb(): DatabaseType {
   if (!_db) {
-    console.log('[db] TURSO_CONNECTION_URL:', process.env.TURSO_CONNECTION_URL ?? 'UNDEFINED');
-    console.log('[db] process.env keys:', Object.keys(process.env).join(', '));
     _db = drizzle(
       createClient({
         url: process.env.TURSO_CONNECTION_URL!,
@@ -25,7 +23,7 @@ function initDb(): DatabaseType {
 export const db = new Proxy({} as DatabaseType, {
   get(_, prop: string | symbol) {
     const instance = initDb();
-    const val = (instance as any)[prop];
+    const val = Reflect.get(instance, prop, instance);
     return typeof val === 'function' ? val.bind(instance) : val;
   },
 });

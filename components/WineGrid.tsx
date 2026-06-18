@@ -51,7 +51,7 @@ export default function WineGrid({ initialWines, filters }: WineGridProps) {
         if (filters.search) params.set('search', filters.search);
 
         const res = await fetch(`/api/wines?${params.toString()}`);
-        const newWines = await res.json();
+        const newWines = await res.json() as Wine[];
 
         if (newWines.length === 0) {
             setHasMore(false);

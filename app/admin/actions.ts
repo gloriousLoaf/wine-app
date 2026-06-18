@@ -1,6 +1,6 @@
 'use server';
 
-import { db } from '../../lib/db';
+import { getDb } from '../../lib/db';
 import { wines } from '../../lib/db/schema';
 import { revalidatePath } from 'next/cache';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
@@ -39,7 +39,7 @@ export async function editWineMetadata(formData: FormData) {
       return { success: false, message: 'Missing required string fields.' };
     }
 
-    await db.update(wines)
+    await getDb().update(wines)
       .set({ 
         title, 
         producer, 
@@ -72,7 +72,7 @@ export async function deleteWine(formData: FormData) {
     }
 
     // Hard delete from DB. (Images in Vercel Blob are kept as orphans for simplicity, or we could delete them if we stored the URL string. Leaving Blob deletion out to prevent accidental wipe of shared assets).
-    await db.delete(wines).where(eq(wines.id, id));
+    await getDb().delete(wines).where(eq(wines.id, id));
 
     revalidatePath('/');
     return { success: true };
@@ -111,7 +111,7 @@ export async function addWine(formData: FormData) {
       imageTitle = imageFile.name;
     }
 
-    await db.insert(wines).values({
+    await getDb().insert(wines).values({
       producer,
       title,
       vintage,

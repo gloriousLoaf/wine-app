@@ -1,9 +1,6 @@
 import type { NextConfig } from "next";
 
-const remotePatterns: NonNullable<NextConfig['images']>['remotePatterns'] = [
-  // Keep Vercel Blob until all images are migrated to R2
-  { protocol: 'https', hostname: '**.public.blob.vercel-storage.com' },
-];
+const remotePatterns: NonNullable<NextConfig['images']>['remotePatterns'] = [];
 
 if (process.env.R2_PUBLIC_URL) {
   remotePatterns.push({

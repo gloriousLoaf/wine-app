@@ -1,29 +1,8 @@
-import { drizzle } from 'drizzle-orm/libsql';
-import { createClient } from '@libsql/client/web';
+import { getCloudflareContext } from '@opennextjs/cloudflare';
+import { drizzle } from 'drizzle-orm/d1';
 import * as schema from './schema';
 
-export type DatabaseType = ReturnType<typeof drizzle<typeof schema>>;
-
-let _db: DatabaseType | undefined;
-
-function initDb(): DatabaseType {
-  if (!_db) {
-    _db = drizzle(
-      createClient({
-        url: process.env.TURSO_CONNECTION_URL!,
-        authToken: process.env.TURSO_AUTH_TOKEN,
-      }),
-      { schema }
-    );
-  }
-  return _db;
+export function getDb() {
+  const { env } = getCloudflareContext();
+  return drizzle(env.wine_db, { schema });
 }
-
-// Proxy defers client creation until first use, when env vars are available
-export const db = new Proxy({} as DatabaseType, {
-  get(_, prop: string | symbol) {
-    const instance = initDb();
-    const val = Reflect.get(instance, prop, instance);
-    return typeof val === 'function' ? val.bind(instance) : val;
-  },
-});

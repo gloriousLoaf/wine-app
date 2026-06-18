@@ -1,16 +1,16 @@
-import { db } from './index';
+import { getDb } from './index';
 import { wines } from './schema';
 import { desc, eq, and, like, or, sql } from 'drizzle-orm';
 
-export async function getWines({ 
-  limit = 12, 
+export async function getWines({
+  limit = 12,
   offset = 0,
   country,
   grape,
   vintage,
   search
-}: { 
-  limit?: number; 
+}: {
+  limit?: number;
   offset?: number;
   country?: string;
   grape?: string;
@@ -32,7 +32,7 @@ export async function getWines({
     );
   }
 
-  return db.query.wines.findMany({
+  return getDb().query.wines.findMany({
     where: conditions.length > 0 ? and(...conditions) : undefined,
     orderBy: [desc(wines.datePosted)],
     limit,
@@ -41,15 +41,15 @@ export async function getWines({
 }
 
 export async function getFilterMetadata() {
-  const allWines = await db.select({
+  const allWines = await getDb().select({
     country: wines.country,
     grape: wines.grape,
     vintage: wines.vintage,
   }).from(wines);
 
-  const countries = Array.from(new Set(allWines.map(w => w.country).filter(Boolean))) as string[];
-  const grapes = Array.from(new Set(allWines.map(w => w.grape).filter(Boolean))) as string[];
-  const vintages = Array.from(new Set(allWines.map(w => w.vintage).filter(Boolean))) as string[];
+  const countries = Array.from(new Set(allWines.map((w: typeof allWines[number]) => w.country).filter(Boolean))) as string[];
+  const grapes = Array.from(new Set(allWines.map((w: typeof allWines[number]) => w.grape).filter(Boolean))) as string[];
+  const vintages = Array.from(new Set(allWines.map((w: typeof allWines[number]) => w.vintage).filter(Boolean))) as string[];
 
   return {
     countries: countries.sort(),
@@ -59,16 +59,16 @@ export async function getFilterMetadata() {
 }
 
 export async function getTotalWinesCount() {
-  const result = await db.select({ count: sql<number>`count(*)` }).from(wines);
+  const result = await getDb().select({ count: sql<number>`count(*)` }).from(wines);
   return result[0].count;
 }
 
 export async function getBottleStats() {
-  const result = await db.select({
+  const result = await getDb().select({
     earliest: sql<string>`min(${wines.datePosted})`,
     latest: sql<string>`max(${wines.datePosted})`
   }).from(wines);
-  
+
   return {
     earliest: result[0].earliest,
     latest: result[0].latest
@@ -97,7 +97,7 @@ export async function getWinesForEdit(search?: string) {
     );
   }
 
-  return db.query.wines.findMany({
+  return getDb().query.wines.findMany({
     where: conditions.length > 0 ? and(...conditions) : undefined,
     orderBy: [desc(wines.datePosted)],
     limit: 50,

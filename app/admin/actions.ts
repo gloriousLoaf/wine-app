@@ -3,7 +3,16 @@
 import { db } from '../../lib/db';
 import { wines } from '../../lib/db/schema';
 import { revalidatePath } from 'next/cache';
-import { put } from '@vercel/blob';
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+
+const r2 = new S3Client({
+  region: 'auto',
+  endpoint: `https://${process.env.R2_ACCOUNT_ID}.r2.cloudflarestorage.com`,
+  credentials: {
+    accessKeyId: process.env.R2_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
+  },
+});
 import { eq } from 'drizzle-orm';
 
 export async function editWineMetadata(formData: FormData) {
@@ -92,10 +101,13 @@ export async function addWine(formData: FormData) {
     let imageTitle = '';
 
     if (imageFile && imageFile.size > 0) {
-      const blob = await put(imageFile.name, imageFile, {
-        access: 'public',
-      });
-      imagePath = blob.url;
+      await r2.send(new PutObjectCommand({
+        Bucket: process.env.R2_BUCKET_NAME!,
+        Key: imageFile.name,
+        Body: new Uint8Array(await imageFile.arrayBuffer()),
+        ContentType: imageFile.type,
+      }));
+      imagePath = `${process.env.R2_PUBLIC_URL}/${imageFile.name}`;
       imageTitle = imageFile.name;
     }
 

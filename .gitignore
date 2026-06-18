@@ -20,6 +20,9 @@
 # cloudflare / opennextjs build output
 /.open-next/
 
+# wrangler
+/.wrangler/
+
 # production
 /build
 

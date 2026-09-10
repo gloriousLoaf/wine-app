@@ -1,7 +1,10 @@
 'use server';
 
+import { getCloudflareContext } from '@opennextjs/cloudflare';
 import { getDb } from '../../lib/db';
 import { wines } from '../../lib/db/schema';
+import { getFilterMetadata, getWinesForEdit } from '../../lib/db/repo';
+import { invalidateCollectionCache } from '../../lib/db/cache';
 import { revalidatePath } from 'next/cache';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 
@@ -15,12 +18,90 @@ const r2 = new S3Client({
 });
 import { eq } from 'drizzle-orm';
 
+/** Length-independent comparison, so the check does not leak the password by timing. */
+function constantTimeEquals(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let difference = 0;
+  for (let i = 0; i < a.length; i++) {
+    difference |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return difference === 0;
+}
+
+/**
+ * Read the admin secret from the Worker binding, falling back to process.env.
+ *
+ * In production OpenNext mirrors the Worker env onto process.env, but under
+ * `next dev` the platform proxy only exposes `.dev.vars` through the Cloudflare
+ * context — so reading process.env alone makes admin unusable locally.
+ */
+function adminPassword(): string | undefined {
+  try {
+    const { env } = getCloudflareContext();
+    if (env?.ADMIN_PASSWORD) return env.ADMIN_PASSWORD;
+  } catch {
+    // No Cloudflare context (e.g. outside a request) — fall through.
+  }
+  return process.env.ADMIN_PASSWORD || undefined;
+}
+
+/**
+ * Single gate for every admin operation, read or write.
+ *
+ * Reads used to be ungated: /admin/edit ran its queries during server render
+ * with no check at all, so anyone who guessed the URL could spend ~2 full table
+ * scans per request. Everything that touches D1 from /admin now goes through
+ * here first.
+ */
+function isAdmin(password: FormDataEntryValue | null): boolean {
+  const expected = adminPassword();
+  if (!expected || typeof password !== 'string') return false;
+  return constantTimeEquals(password, expected);
+}
+
+const UNAUTHORIZED = { success: false as const, message: 'Unauthorized: Incorrect password' };
+
+/**
+ * Fetch the edit list. Called from the client only after a password is entered,
+ * which is what keeps the queries behind the gate.
+ */
+export async function loadWinesForEdit(formData: FormData) {
+  try {
+    if (!isAdmin(formData.get('password'))) return UNAUTHORIZED;
+
+    const search = formData.get('search');
+    const [editableWines, filters] = await Promise.all([
+      getWinesForEdit(typeof search === 'string' ? search : undefined),
+      getFilterMetadata(),
+    ]);
+
+    return {
+      success: true as const,
+      wines: editableWines.map((wine) => ({
+        id: wine.id,
+        title: wine.title,
+        producer: wine.producer,
+        vintage: wine.vintage,
+        notes: wine.notes,
+        country: wine.country,
+        grape: wine.grape,
+        datePosted: wine.datePosted,
+      })),
+      countries: filters.countries,
+      grapes: filters.grapes,
+    };
+  } catch (error: unknown) {
+    console.error('Failed to load wines for edit:', error);
+    return {
+      success: false as const,
+      message: error instanceof Error ? error.message : 'An unknown error occurred.',
+    };
+  }
+}
+
 export async function editWineMetadata(formData: FormData) {
   try {
-    const password = formData.get('password') as string;
-    if (password !== process.env.ADMIN_PASSWORD) {
-      return { success: false, message: 'Unauthorized: Incorrect password' };
-    }
+    if (!isAdmin(formData.get('password'))) return UNAUTHORIZED;
 
     const id = parseInt(formData.get('id') as string, 10);
     const title = formData.get('title') as string | null;
@@ -40,17 +121,18 @@ export async function editWineMetadata(formData: FormData) {
     }
 
     await getDb().update(wines)
-      .set({ 
-        title, 
-        producer, 
-        vintage, 
-        notes: notes || null, 
-        country, 
-        grape, 
-        datePosted 
+      .set({
+        title,
+        producer,
+        vintage,
+        notes: notes || null,
+        country,
+        grape,
+        datePosted
       })
       .where(eq(wines.id, id));
 
+    invalidateCollectionCache();
     revalidatePath('/');
     return { success: true };
   } catch (error: unknown) {
@@ -61,19 +143,17 @@ export async function editWineMetadata(formData: FormData) {
 
 export async function deleteWine(formData: FormData) {
   try {
-    const password = formData.get('password') as string;
-    if (password !== process.env.ADMIN_PASSWORD) {
-      return { success: false, message: 'Unauthorized: Incorrect password' };
-    }
+    if (!isAdmin(formData.get('password'))) return UNAUTHORIZED;
 
     const id = parseInt(formData.get('id') as string, 10);
     if (isNaN(id)) {
       return { success: false, message: 'Invalid wine ID' };
     }
 
-    // Hard delete from DB. (Images in Vercel Blob are kept as orphans for simplicity, or we could delete them if we stored the URL string. Leaving Blob deletion out to prevent accidental wipe of shared assets).
+    // Hard delete from DB. (Images in R2 are kept as orphans for simplicity, or we could delete them if we stored the URL string. Leaving object deletion out to prevent accidental wipe of shared assets).
     await getDb().delete(wines).where(eq(wines.id, id));
 
+    invalidateCollectionCache();
     revalidatePath('/');
     return { success: true };
   } catch (error: unknown) {
@@ -84,10 +164,7 @@ export async function deleteWine(formData: FormData) {
 
 export async function addWine(formData: FormData) {
   try {
-    const password = formData.get('password') as string;
-    if (password !== process.env.ADMIN_PASSWORD) {
-      return { success: false, message: 'Unauthorized: Incorrect password' };
-    }
+    if (!isAdmin(formData.get('password'))) return UNAUTHORIZED;
 
     const producer = formData.get('producer') as string;
     const title = formData.get('title') as string;
@@ -123,6 +200,7 @@ export async function addWine(formData: FormData) {
       isoCreatedAt: new Date().toISOString(),
     });
 
+    invalidateCollectionCache();
     revalidatePath('/');
     return { success: true };
   } catch (error: unknown) {

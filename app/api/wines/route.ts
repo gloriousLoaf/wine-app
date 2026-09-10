@@ -1,15 +1,29 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getWines } from '../../../lib/db/repo';
+import { parseWineQuery } from '../../../lib/query-params';
+
+/**
+ * Cache the JSON at the Cloudflare edge for 5 minutes and allow a stale
+ * response to be served for an hour while it revalidates.
+ *
+ * This is the layer that makes repeat traffic free: an edge hit never invokes
+ * the Worker, so it never reaches D1. It only takes effect once a Cache Rule
+ * exists for this path — Cloudflare does not cache /api/* by default. See
+ * CLOUDFLARE.md.
+ */
+const CACHE_CONTROL = 'public, s-maxage=300, stale-while-revalidate=3600';
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
-  const limit = parseInt(searchParams.get('limit') || '12');
-  const offset = parseInt(searchParams.get('offset') || '0');
-  const country = searchParams.get('country') || undefined;
-  const grape = searchParams.get('grape') || undefined;
-  const vintage = searchParams.get('vintage') || undefined;
-  const search = searchParams.get('search') || undefined;
 
-  const winesData = await getWines({ limit, offset, country, grape, vintage, search });
-  return NextResponse.json(winesData);
+  // Every value is clamped and normalized before it can reach the query
+  // builder. Previously `limit` went through a bare parseInt straight into the
+  // query, so ?limit=1000000 returned the entire table in one request.
+  const query = parseWineQuery(searchParams);
+
+  const winesData = await getWines(query);
+
+  return NextResponse.json(winesData, {
+    headers: { 'Cache-Control': CACHE_CONTROL },
+  });
 }

@@ -1,18 +1,18 @@
-import { getWinesForEdit, getFilterMetadata } from '../../../lib/db/repo';
 import EditClient from './EditClient';
 import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
 
-export default async function AdminEditPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ search?: string; }>;
-}) {
-  const params = await searchParams;
-  const editableWines = await getWinesForEdit(params.search);
-  const filters = await getFilterMetadata();
-
+/**
+ * Renders a shell only — no database access.
+ *
+ * This page used to query D1 during server render (the edit list plus the
+ * filter metadata, roughly two full table scans) before any password was
+ * checked, which made it an unauthenticated way to spend the daily read quota.
+ * The list is now fetched by the client through the password-checked
+ * `loadWinesForEdit` action instead.
+ */
+export default function AdminEditPage() {
   return (
     <div className="container" style={{ padding: '2rem 1rem' }}>
       <div style={{ display: 'flex', gap: '1rem', marginBottom: '2rem' }}>
@@ -24,12 +24,7 @@ export default async function AdminEditPage({
           Go to Add Wine →
         </Link>
       </div>
-      <EditClient
-        wines={editableWines}
-        countries={filters.countries}
-        grapes={filters.grapes}
-        searchParam={params.search || ''}
-      />
+      <EditClient />
     </div>
   );
 }

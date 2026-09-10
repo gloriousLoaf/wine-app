@@ -1,4 +1,5 @@
-import { getWines, getFilterMetadata, getTotalWinesCount, getBottleStats } from '../lib/db/repo';
+import { getWines, getFilterMetadata, getCollectionStats } from '../lib/db/repo';
+import { parseWineFilters, DEFAULT_PAGE_SIZE } from '../lib/query-params';
 import WineGrid from '../components/WineGrid';
 import FilterModule from '../components/FilterModule';
 import DashboardStats from '../components/DashboardStats';
@@ -50,16 +51,21 @@ export default async function HomePage({
   }>;
 }) {
   const params = await searchParams;
-  const initialWines = await getWines({
-    limit: 12,
-    country: params.country,
-    grape: params.grape,
-    vintage: params.vintage,
-    search: params.search,
-  });
-  const filters = await getFilterMetadata();
-  const totalWines = await getTotalWinesCount();
-  const bottleStats = await getBottleStats();
+
+  // Normalize before anything reaches the database. The initial page size is
+  // fixed rather than read from the URL — only /api/wines honours `limit`, so
+  // there is one less knob to turn from a crawler's address bar.
+  const activeFilters = parseWineFilters(params);
+
+  // These three are independent; the two metadata queries are also cached, so
+  // on a warm isolate this is a single indexed 12-row read.
+  const [initialWines, filters, stats] = await Promise.all([
+    getWines({ ...activeFilters, limit: DEFAULT_PAGE_SIZE }),
+    getFilterMetadata(),
+    getCollectionStats(),
+  ]);
+
+  const bottleStats = { earliest: stats.earliest, latest: stats.latest };
 
   return (
     <main>
@@ -74,7 +80,7 @@ export default async function HomePage({
           )}
 
           <DashboardStats
-            totalWines={totalWines}
+            totalWines={stats.total}
             countries={filters.countries}
             grapes={filters.grapes}
             vintages={filters.vintages}
@@ -85,9 +91,9 @@ export default async function HomePage({
       </header>
 
 
-      <WineGrid initialWines={initialWines} filters={params} />
+      <WineGrid initialWines={initialWines} filters={activeFilters} />
 
-      <FilterModule filters={filters} currentFilters={params} />
+      <FilterModule filters={filters} currentFilters={activeFilters} />
     </main>
   );
 }

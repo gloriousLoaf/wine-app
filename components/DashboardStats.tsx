@@ -10,7 +10,7 @@ interface DashboardStatsProps {
   countries: string[];
   grapes: string[];
   vintages: string[];
-  bottleStats: { earliest: string; latest: string; };
+  bottleStats: { earliest: string | null; latest: string | null; };
 }
 
 export default function DashboardStats({
@@ -31,7 +31,7 @@ export default function DashboardStats({
     return params.toString();
   }, [searchParams]);
 
-  const formatDate = (isoString?: string) => {
+  const formatDate = (isoString?: string | null) => {
     if (!isoString) return 'Unknown';
     return new Date(isoString).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
   };

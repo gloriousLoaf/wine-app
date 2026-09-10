@@ -1,13 +1,18 @@
 import type { Config } from 'drizzle-kit';
-import * as dotenv from 'dotenv';
-dotenv.config({ path: '.env' });
 
+/**
+ * Used for generating migration SQL from lib/db/schema.ts:
+ *
+ *   npx drizzle-kit generate
+ *
+ * Migrations are applied to D1 with wrangler rather than by drizzle-kit, so no
+ * database credentials are needed here:
+ *
+ *   npx wrangler d1 execute wine-db --file migrations/<file>.sql            # local
+ *   npx wrangler d1 execute wine-db --file migrations/<file>.sql --remote   # production
+ */
 export default {
   schema: './lib/db/schema.ts',
-  out: './drizzle',
-  dialect: 'turso',
-  dbCredentials: {
-    url: process.env.TURSO_CONNECTION_URL!,
-    authToken: process.env.TURSO_AUTH_TOKEN,
-  },
+  out: './migrations',
+  dialect: 'sqlite',
 } satisfies Config;

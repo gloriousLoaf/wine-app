@@ -67,9 +67,26 @@ const body = await response.json().catch(() => null);
 if (!response.ok || !body?.success) {
   // Cloudflare returns 200 with success:false for some rejections, so check both.
   const detail = body?.errors?.map((e) => `${e.code}: ${e.message}`).join('; ');
+
   console.error(`✗ Edge cache purge failed (HTTP ${response.status})${detail ? `: ${detail}` : ''}`);
   console.error('  The Worker deployed successfully — only the purge failed.');
-  console.error(`  Purge ${hostname} by hostname from the dashboard.`);
+
+  // Which of the two values is wrong is the first thing you want to know, and
+  // Cloudflare's own message does not say. Narrow it by status code.
+  if (response.status === 401 || response.status === 403) {
+    console.error('  → Suspect CLOUDFLARE_PURGE_TOKEN: wrong value, or the token');
+    console.error('    lacks Zone → Cache Purge → Purge on this zone.');
+  } else if (response.status === 400 || response.status === 404) {
+    // Not a credential — printing it is how you spot a typo.
+    console.error(`  → Suspect CLOUDFLARE_ZONE_ID: got "${zoneId}".`);
+  }
+
+  console.error('  Both are *build* variables (Settings → Build → Variables and');
+  console.error('  Secrets). The `wrangler secret put` values of the same name are');
+  console.error('  runtime-only and are not visible to this script.');
+  console.error('  Check them with:  npm run purge');
+  console.error(`  Or purge by hand: Caching → Configuration → Purge Cache →`);
+  console.error(`  Custom Purge → Hostname → ${hostname}`);
   process.exit(1);
 }
 

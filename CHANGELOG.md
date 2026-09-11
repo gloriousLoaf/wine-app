@@ -106,7 +106,7 @@ cost roughly 4,400 row reads, so the quota ran out at around 1,100 page views.
 - `Cache-Control: public, s-maxage=300, stale-while-revalidate=3600` on the
   collection view and wines API, so the Cloudflare edge can absorb repeat
   traffic without invoking the Worker. Requires the Cache Rules documented in
-  [CLOUDFLARE.md](CLOUDFLARE.md).
+  the README under "Edge configuration".
 - `migrations/` directory with the index migration, and a README section on
   keeping queries index-backed.
 

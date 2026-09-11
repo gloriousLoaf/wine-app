@@ -17,7 +17,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   - A purge that is attempted and *fails* exits non-zero and marks the build red.
     A silently stale cache is what this exists to prevent, and the message makes
     clear the Worker itself already deployed.
-  - Also runnable on its own with `npm run purge`.
+  - Also runnable on its own with `npm run purge`. Running it locally with the
+    two values is the fastest way to check them, without waiting on a deploy.
+  - A failed purge names the likely culprit rather than just relaying
+    Cloudflare's message, which says only that something was rejected: 401/403
+    points at the token, 400/404 at the zone ID, echoing the zone ID it used so
+    a typo is visible. It also restates that both are build variables, since
+    reusing the runtime secret names is the easy mistake.
 
 ### Note
 - Build-time variables are not runtime secrets. The `CLOUDFLARE_ZONE_ID` and

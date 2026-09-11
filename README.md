@@ -154,16 +154,31 @@ It purges by **hostname**, not by URL, because the cache key includes the query
 string — every filter combination, and every Next.js `_rsc` variant of each, is
 a separate cache entry. There is no practical URL list to enumerate.
 
-#### Gotcha: a deploy does not purge
+#### Deploys purge too — but only if the build has credentials
 
-Only admin writes purge. If a release changes the *markup* of the collection
-view, the edge can keep serving the previous HTML for up to an hour. After a
-deploy that changes how these pages look, purge manually:
+Admin writes purge from the Worker at runtime. Deploys purge through
+[scripts/purge-cache.mjs](scripts/purge-cache.mjs), chained onto `npm run deploy`
+so it runs after the Worker is live. Without it, a release that changed the
+*markup* of the collection view would serve the previous HTML for up to an hour.
+
+The catch: **build-time variables are not the same as runtime secrets.** The
+`CLOUDFLARE_ZONE_ID` and `CLOUDFLARE_PURGE_TOKEN` set with `wrangler secret put`
+are only visible to the running Worker. The deploy script runs in the *build*
+environment and needs its own copies, set under
+**Workers & Pages → wine-app → Settings → Build → Variables and Secrets**.
+
+If they are missing the script prints a warning and exits 0, so the deploy still
+succeeds — it just leaves the cache stale. Watch for that warning in the build
+log. To purge by hand:
 
 **Caching → Configuration → Purge Cache → Custom Purge → Hostname →
 `wine.metcalf.dev`**
 
-Raise the TTL past an hour only if you also purge on deploy.
+If the purge is attempted and fails, the script exits non-zero and the build goes
+red on purpose — a silently stale cache is the thing this exists to prevent. The
+Worker has already deployed at that point; only the purge failed.
+
+You can also run it on its own: `npm run purge`.
 
 #### Gotcha: do not remove the query string from the cache key
 

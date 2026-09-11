@@ -5,6 +5,26 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - Purge the edge cache on deploy
+
+### Added
+- `scripts/purge-cache.mjs`, chained onto `npm run deploy` so a deploy purges the
+  Cloudflare edge cache once the Worker is live. Closes the gap left by the
+  previous change: admin writes purged, but a release that changed the markup of
+  the collection view could serve the previous HTML for up to an hour.
+  - Missing credentials are a warning and exit 0, so a deploy without them still
+    succeeds rather than failing on something optional.
+  - A purge that is attempted and *fails* exits non-zero and marks the build red.
+    A silently stale cache is what this exists to prevent, and the message makes
+    clear the Worker itself already deployed.
+  - Also runnable on its own with `npm run purge`.
+
+### Note
+- Build-time variables are not runtime secrets. The `CLOUDFLARE_ZONE_ID` and
+  `CLOUDFLARE_PURGE_TOKEN` set with `wrangler secret put` are visible only to the
+  running Worker; the deploy script needs its own copies set as build variables.
+  Documented in the README.
+
 ## [Unreleased] - Edge cache purge on admin write
 
 ### Added

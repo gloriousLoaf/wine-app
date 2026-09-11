@@ -5,6 +5,41 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - Edge cache purge on admin write
+
+### Added
+- `purgeEdgeCache()` in the admin write actions. Adding, editing or deleting a
+  wine now purges the Cloudflare edge cache for `wine.metcalf.dev`, so the change
+  is visible immediately instead of whenever the cache TTL happened to expire.
+  Purging by hostname rather than by URL is deliberate: the cache key includes
+  the query string, so every filter combination — and every Next.js `_rsc`
+  variant of each — is its own cache entry, with no practical URL list to
+  enumerate and no wildcard support in single-URL purge.
+  - Failure is logged and swallowed. The write has already committed, so a purge
+    that did not go through is a staleness problem, not a reason to report the
+    edit as failed. Verified by pointing it at credentials that cannot work and
+    confirming the write still persists and the admin sees no error.
+  - Deferred with `ctx.waitUntil()` so saving does not wait on Cloudflare, and
+    skipped entirely when `CLOUDFLARE_ZONE_ID` / `CLOUDFLARE_PURGE_TOKEN` are
+    unset, which keeps local dev working without credentials.
+
+### Changed
+- Edge TTL for the collection views raised from 5 minutes to 1 hour
+  (`stale-while-revalidate` from 1 hour to 1 day). Staleness is now bounded by
+  the purge above rather than by the TTL, so a longer TTL is strictly better —
+  more crawler traffic is absorbed at the edge and never reaches the Worker.
+- The `Cache-Control` value moved to `lib/cache-control.ts`, shared by
+  `next.config.ts` and the wines API route, which previously declared it twice
+  and could drift.
+- `.open-next/**` added to the ESLint ignores. It is generated build output, so
+  `npm run lint` failed on bundled vendor code for anyone who had built the
+  worker.
+
+### Known limitation
+- A **deploy** does not purge — only admin writes do. A release that changes the
+  markup of the collection view can serve stale HTML for up to an hour; purge by
+  hostname from the dashboard afterwards. Documented in the README.
+
 ## [Unreleased] - D1 read-cost and abuse hardening
 
 Context: the daily D1 read quota (5M rows) was being exhausted several days in a

@@ -46,8 +46,12 @@ Set on the Worker via `wrangler secret put <NAME> --name wine-app`. Not in `.env
 | `R2_SECRET_ACCESS_KEY` | R2 API token — Secret Access Key |
 | `R2_BUCKET_NAME` | `wine-images` |
 | `R2_PUBLIC_URL` | `https://pub-xxx.r2.dev` (from bucket Settings → Public access) |
+| `CLOUDFLARE_ZONE_ID` | Zone ID for `metcalf.dev` (zone overview page, right sidebar) |
+| `CLOUDFLARE_PURGE_TOKEN` | API token scoped to **Zone → Cache Purge → Purge** on that zone only |
 
 For local dev, put these in `.dev.vars` (wrangler's local secrets file, gitignored). The R2 credentials use the S3-compatible API — use Access Key ID / Secret Access Key, not the "Token value" shown at R2 token creation (that's for Cloudflare's own API).
+
+The two `CLOUDFLARE_*` values are for purging the edge cache after an admin write — see [Edge caching](#edge-caching). They are optional: if either is unset the purge is skipped silently and everything else still works, which is why local dev does not need them. Create the token under My Profile → API Tokens → Create Token → Custom token, with that single permission and Zone Resources limited to `metcalf.dev`. Do not use the Global API Key.
 
 ---
 
@@ -130,6 +134,44 @@ and the admin actions call `invalidateCollectionCache()` on write.
 
 Untrusted paging input is clamped in [lib/query-params.ts](lib/query-params.ts) —
 without it, `?limit=1000000` is a full-table export.
+
+### Edge caching
+
+The collection view (`/`) and the wines API are cached at the Cloudflare edge.
+An edge hit never invokes the Worker, so it never reaches D1 — this is what
+absorbs crawler traffic. The header comes from
+[lib/cache-control.ts](lib/cache-control.ts), used by both `next.config.ts` and
+the API route so the two cannot drift. It only has any effect because a Cache
+Rule marks those paths eligible; see [CLOUDFLARE.md](CLOUDFLARE.md).
+
+The TTL is an hour, which is safe because **it is not what bounds staleness**.
+The admin write actions call `purgeEdgeCache()`
+([app/admin/actions.ts](app/admin/actions.ts)), which purges the edge cache for
+`wine.metcalf.dev` so an added or edited wine appears immediately. That is the
+trade the long TTL depends on: purge for freshness, long TTL for cheapness.
+
+It purges by **hostname**, not by URL, because the cache key includes the query
+string — every filter combination, and every Next.js `_rsc` variant of each, is
+a separate cache entry. There is no practical URL list to enumerate.
+
+#### Gotcha: a deploy does not purge
+
+Only admin writes purge. If a release changes the *markup* of the collection
+view, the edge can keep serving the previous HTML for up to an hour. After a
+deploy that changes how these pages look, purge manually:
+
+**Caching → Configuration → Purge Cache → Custom Purge → Hostname →
+`wine.metcalf.dev`**
+
+Raise the TTL past an hour only if you also purge on deploy.
+
+#### Gotcha: do not remove the query string from the cache key
+
+Cloudflare's default cache key includes it, and Next.js client-side navigations
+re-request the same path with `?_rsc=<hash>` to receive an RSC payload rather
+than HTML. The query string is what keeps those two variants under separate
+keys. Strip it and the edge can serve an RSC payload to a browser navigation,
+which renders as garbage.
 
 ### Migrations
 

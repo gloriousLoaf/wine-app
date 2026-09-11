@@ -154,18 +154,36 @@ It purges by **hostname**, not by URL, because the cache key includes the query
 string — every filter combination, and every Next.js `_rsc` variant of each, is
 a separate cache entry. There is no practical URL list to enumerate.
 
-#### Deploys purge too — but only if the build has credentials
+#### Deploys purge too — but two pieces of dashboard config make it work
 
 Admin writes purge from the Worker at runtime. Deploys purge through
-[scripts/purge-cache.mjs](scripts/purge-cache.mjs), chained onto `npm run deploy`
-so it runs after the Worker is live. Without it, a release that changed the
-*markup* of the collection view would serve the previous HTML for up to an hour.
+[scripts/purge-cache.mjs](scripts/purge-cache.mjs). Without it, a release that
+changed the *markup* of the collection view would serve the previous HTML for up
+to an hour.
 
-The catch: **build-time variables are not the same as runtime secrets.** The
-`CLOUDFLARE_ZONE_ID` and `CLOUDFLARE_PURGE_TOKEN` set with `wrangler secret put`
-are only visible to the running Worker. The deploy script runs in the *build*
-environment and needs its own copies, set under
-**Workers & Pages → wine-app → Settings → Build → Variables and Secrets**.
+Production does not deploy via `npm run deploy` — it uses **Cloudflare Workers
+Builds**, whose commands live in the dashboard, not in this repo
+(**Workers & Pages → wine-app → Settings → Build**):
+
+| Field | Value |
+|---|---|
+| Build command | `npm run build:worker` |
+| Deploy command | `npx wrangler deploy && npm run purge` |
+
+**The `&& npm run purge` is the whole point.** Without it the script never runs
+on a real deploy, no matter what `package.json` says — `npm run deploy` only
+covers manual deploys from a laptop.
+
+The second catch: **build-time variables are not the same as runtime secrets.**
+The `CLOUDFLARE_ZONE_ID` and `CLOUDFLARE_PURGE_TOKEN` set with
+`wrangler secret put` are only visible to the running Worker. The deploy script
+runs in the *build* environment and needs its own copies, set under
+**Settings → Build → Variables and Secrets**.
+
+Use a *separate* purge token for the build rather than reusing the Worker's.
+Cloudflare shows a token's value only once at creation, so the Worker's cannot be
+read back anyway — and one token per consumer means either can be revoked without
+breaking the other.
 
 If they are missing the script prints a warning and exits 0, so the deploy still
 succeeds — it just leaves the cache stale. Watch for that warning in the build

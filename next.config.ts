@@ -1,5 +1,6 @@
 import type { NextConfig } from "next";
 import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
+import { COLLECTION_CACHE_CONTROL } from "./lib/cache-control";
 
 initOpenNextCloudflareForDev();
 
@@ -30,9 +31,7 @@ const nextConfig: NextConfig = {
         // header only matters once a Cache Rule enables HTML caching for the
         // zone — Cloudflare does not cache HTML by default. See CLOUDFLARE.md.
         source: '/',
-        headers: [
-          { key: 'Cache-Control', value: 'public, s-maxage=300, stale-while-revalidate=3600' },
-        ],
+        headers: [{ key: 'Cache-Control', value: COLLECTION_CACHE_CONTROL }],
       },
       {
         // Never cache admin, and keep it out of any index that ignores robots.txt.

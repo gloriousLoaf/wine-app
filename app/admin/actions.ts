@@ -28,21 +28,24 @@ function constantTimeEquals(a: string, b: string): boolean {
   return difference === 0;
 }
 
+type SecretName = 'ADMIN_PASSWORD' | 'CLOUDFLARE_ZONE_ID' | 'CLOUDFLARE_PURGE_TOKEN';
+
 /**
- * Read the admin secret from the Worker binding, falling back to process.env.
+ * Read a secret from the Worker binding, falling back to process.env.
  *
  * In production OpenNext mirrors the Worker env onto process.env, but under
  * `next dev` the platform proxy only exposes `.dev.vars` through the Cloudflare
  * context — so reading process.env alone makes admin unusable locally.
  */
-function adminPassword(): string | undefined {
+function readSecret(name: SecretName): string | undefined {
   try {
     const { env } = getCloudflareContext();
-    if (env?.ADMIN_PASSWORD) return env.ADMIN_PASSWORD;
+    const value = env?.[name];
+    if (value) return value;
   } catch {
     // No Cloudflare context (e.g. outside a request) — fall through.
   }
-  return process.env.ADMIN_PASSWORD || undefined;
+  return process.env[name] || undefined;
 }
 
 /**
@@ -54,9 +57,62 @@ function adminPassword(): string | undefined {
  * here first.
  */
 function isAdmin(password: FormDataEntryValue | null): boolean {
-  const expected = adminPassword();
+  const expected = readSecret('ADMIN_PASSWORD');
   if (!expected || typeof password !== 'string') return false;
   return constantTimeEquals(password, expected);
+}
+
+/** The public hostname whose edge cache is purged after a write. */
+const PURGE_HOSTNAME = 'wine.metcalf.dev';
+
+/**
+ * Purge the Cloudflare edge cache for the public site after a write.
+ *
+ * The collection views are cached at the edge with a long TTL (see
+ * lib/cache-control.ts), so without this an added or edited wine would not
+ * appear until that TTL expired. Purging is what lets the TTL be long, which is
+ * what keeps crawler traffic off the Worker.
+ *
+ * Purging by *hostname* rather than by URL is deliberate: the cache key includes
+ * the query string, so every filter combination — and every Next.js `_rsc`
+ * variant of each — is its own cache entry. There is no practical URL list to
+ * enumerate, and single-URL purge does not accept wildcards.
+ *
+ * Failure is logged and swallowed. The write has already committed; a purge that
+ * did not go through is a staleness problem, not a reason to tell the admin
+ * their edit failed.
+ */
+async function purgeEdgeCache(): Promise<void> {
+  const zoneId = readSecret('CLOUDFLARE_ZONE_ID');
+  const token = readSecret('CLOUDFLARE_PURGE_TOKEN');
+
+  // Not configured (local dev, or no token set) — nothing to do.
+  if (!zoneId || !token) return;
+
+  const purge = fetch(`https://api.cloudflare.com/client/v4/zones/${zoneId}/purge_cache`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ hosts: [PURGE_HOSTNAME] }),
+  })
+    .then(async (response) => {
+      if (!response.ok) {
+        console.error('Edge cache purge failed:', response.status, await response.text());
+      }
+    })
+    .catch((error: unknown) => {
+      console.error('Edge cache purge error:', error);
+    });
+
+  try {
+    // Don't hold the admin's response open for a round trip to Cloudflare.
+    getCloudflareContext().ctx.waitUntil(purge);
+  } catch {
+    // No Cloudflare context to defer onto — just wait for it.
+    await purge;
+  }
 }
 
 const UNAUTHORIZED = { success: false as const, message: 'Unauthorized: Incorrect password' };
@@ -133,6 +189,7 @@ export async function editWineMetadata(formData: FormData) {
       .where(eq(wines.id, id));
 
     invalidateCollectionCache();
+    await purgeEdgeCache();
     revalidatePath('/');
     return { success: true };
   } catch (error: unknown) {
@@ -154,6 +211,7 @@ export async function deleteWine(formData: FormData) {
     await getDb().delete(wines).where(eq(wines.id, id));
 
     invalidateCollectionCache();
+    await purgeEdgeCache();
     revalidatePath('/');
     return { success: true };
   } catch (error: unknown) {
@@ -201,6 +259,7 @@ export async function addWine(formData: FormData) {
     });
 
     invalidateCollectionCache();
+    await purgeEdgeCache();
     revalidatePath('/');
     return { success: true };
   } catch (error: unknown) {

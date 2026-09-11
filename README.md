@@ -154,16 +154,49 @@ It purges by **hostname**, not by URL, because the cache key includes the query
 string — every filter combination, and every Next.js `_rsc` variant of each, is
 a separate cache entry. There is no practical URL list to enumerate.
 
-#### Gotcha: a deploy does not purge
+#### Deploys purge too — but two pieces of dashboard config make it work
 
-Only admin writes purge. If a release changes the *markup* of the collection
-view, the edge can keep serving the previous HTML for up to an hour. After a
-deploy that changes how these pages look, purge manually:
+Admin writes purge from the Worker at runtime. Deploys purge through
+[scripts/purge-cache.mjs](scripts/purge-cache.mjs). Without it, a release that
+changed the *markup* of the collection view would serve the previous HTML for up
+to an hour.
+
+Production does not deploy via `npm run deploy` — it uses **Cloudflare Workers
+Builds**, whose commands live in the dashboard, not in this repo
+(**Workers & Pages → wine-app → Settings → Build**):
+
+| Field | Value |
+|---|---|
+| Build command | `npm run build:worker` |
+| Deploy command | `npx wrangler deploy && npm run purge` |
+
+**The `&& npm run purge` is the whole point.** Without it the script never runs
+on a real deploy, no matter what `package.json` says — `npm run deploy` only
+covers manual deploys from a laptop.
+
+The second catch: **build-time variables are not the same as runtime secrets.**
+The `CLOUDFLARE_ZONE_ID` and `CLOUDFLARE_PURGE_TOKEN` set with
+`wrangler secret put` are only visible to the running Worker. The deploy script
+runs in the *build* environment and needs its own copies, set under
+**Settings → Build → Variables and Secrets**.
+
+Use a *separate* purge token for the build rather than reusing the Worker's.
+Cloudflare shows a token's value only once at creation, so the Worker's cannot be
+read back anyway — and one token per consumer means either can be revoked without
+breaking the other.
+
+If they are missing the script prints a warning and exits 0, so the deploy still
+succeeds — it just leaves the cache stale. Watch for that warning in the build
+log. To purge by hand:
 
 **Caching → Configuration → Purge Cache → Custom Purge → Hostname →
 `wine.metcalf.dev`**
 
-Raise the TTL past an hour only if you also purge on deploy.
+If the purge is attempted and fails, the script exits non-zero and the build goes
+red on purpose — a silently stale cache is the thing this exists to prevent. The
+Worker has already deployed at that point; only the purge failed.
+
+You can also run it on its own: `npm run purge`.
 
 #### Gotcha: do not remove the query string from the cache key
 

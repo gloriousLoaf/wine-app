@@ -53,10 +53,10 @@ safe.
 
 ## 1. Cache Rules — the biggest single lever
 
-Cloudflare does not cache HTML or `/api/*` by default. The app already sends
-`Cache-Control: public, s-maxage=300, stale-while-revalidate=3600` on the
-collection view and the wines API, but nothing honours that until a rule marks
-the response eligible for cache. That is what you are creating here.
+Cloudflare does not cache HTML or `/api/*` by default. The app already sends a
+`Cache-Control` header on the collection view and the wines API (the value lives
+in `lib/cache-control.ts`), but nothing honours that until a rule marks the
+response eligible for cache. That is what you are creating here.
 
 You will create **two** rules. Order matters: the admin bypass has to be
 evaluated first, so create it first.
@@ -109,7 +109,7 @@ Create this one first.
    - Selecting that reveals more options. Set **Edge TTL** to
      **Use cache-control header if present, use default Cloudflare caching
      behavior if not**. This is the option that makes Cloudflare honour the
-     `s-maxage=300` the app already sends.
+     `s-maxage` the app already sends (set in `lib/cache-control.ts`).
    - Set **Browser TTL** to **Respect origin TTL**.
    - **Leave every other setting alone**, in particular anything under
      **Cache Key**. See the note below — changing the cache key here can break
@@ -125,9 +125,9 @@ evaluated top to bottom.
 If it is not, drag it up by the handle (the ⠿ dots) at the left of the row and
 click **Save** on the ordering prompt.
 
-- [ ] Rule 1 created (admin bypass)
-- [ ] Rule 2 created (collection + API caching)
-- [ ] Admin bypass is listed **first**
+- [x] Rule 1 created (admin bypass)
+- [x] Rule 2 created (collection + API caching)
+- [x] Admin bypass is listed **first**
 
 > **Do not enable "Ignore query string" on the cache key.** The default cache key
 > includes the query string, and two separate things depend on that.
@@ -142,10 +142,16 @@ click **Save** on the ordering prompt.
 > under separate keys. Strip it and Cloudflare can serve an RSC payload to a
 > normal browser navigation, which renders as a page full of garbage.
 
-> **Known trade-off:** with a 5 minute edge TTL, a wine added or edited in
-> `/admin` takes up to 5 minutes to appear on the public homepage. If that
-> bothers you, set Edge TTL to **Ignore cache-control header and use this TTL**
-> with a value of 1 minute — still ~98% of the benefit against a crawler.
+> **Leave the Edge TTL long — do not lower it to reduce admin lag.** That was
+> the right move before the app purged on its own, and it is now exactly
+> backwards.
+>
+> Adding or editing a wine purges the edge cache for this hostname
+> (`purgeEdgeCache()` in `app/admin/actions.ts`), and so does a deploy
+> (`scripts/purge-cache.mjs`). Staleness is bounded by those purges, not by the
+> TTL — so a *longer* TTL is strictly better, because more crawler traffic is
+> absorbed at the edge and never reaches the Worker or D1. Shortening it would
+> throw that away and buy nothing.
 
 ---
 
@@ -178,7 +184,7 @@ generates, and far below what a scraper does. Use **Managed Challenge** rather
 than **Block** — a challenge is recoverable for a real person on a shared or
 mobile IP, a block is not.
 
-- [ ] Rate limiting rule created, scoped to `wine.metcalf.dev`
+- [x] Rate limiting rule created, scoped to `wine.metcalf.dev`
 
 ---
 
@@ -227,9 +233,9 @@ nothing about intent — it just enforces that against crawlers that ignore
 robots.txt, which are the ones causing the problem. The list is user-agent
 matching, so it is maintenance: add to it if a new crawler shows up in your logs.
 
-- [ ] Bot Fight Mode on (zone-wide)
-- [ ] "Block AI Scrapers and Crawlers" left **off**
-- [ ] AI-crawler custom rule created, scoped to `wine.metcalf.dev`
+- [x] Bot Fight Mode on (zone-wide)
+- [x] "Block AI Scrapers and Crawlers" left **off**
+- [x] AI-crawler custom rule created, scoped to `wine.metcalf.dev`
 
 ---
 
@@ -289,8 +295,9 @@ curl -sI "https://wine.metcalf.dev/" | grep -i set-cookie
 ```
 
 If something comes back, edit the `Cache collection views` rule and change
-**Edge TTL** to **Ignore cache-control header and use this TTL**, set to
-5 minutes. That forces caching and strips the header on the way out.
+**Edge TTL** to **Ignore cache-control header and use this TTL**, set to match
+the `s-maxage` in `lib/cache-control.ts` (1 hour). That forces caching and strips
+the header on the way out.
 
 This is safe *here* specifically because `/` and `/api/wines` are anonymous
 public reads with no per-visitor state — and `/admin`, which does have state,

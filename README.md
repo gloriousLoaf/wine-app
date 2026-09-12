@@ -30,7 +30,7 @@ The D1 binding is accessed per-request via `getCloudflareContext()` from `@openn
 Auto-deploys on push to `main`.
 
 Edge-level protection (cache rules, rate limiting, bot controls) is dashboard
-configuration, not code — see [CLOUDFLARE.md](CLOUDFLARE.md).
+configuration, not code — see [Edge configuration](#edge-configuration-cloudflare-dashboard).
 
 ---
 
@@ -51,7 +51,109 @@ Set on the Worker via `wrangler secret put <NAME> --name wine-app`. Not in `.env
 
 For local dev, put these in `.dev.vars` (wrangler's local secrets file, gitignored). The R2 credentials use the S3-compatible API — use Access Key ID / Secret Access Key, not the "Token value" shown at R2 token creation (that's for Cloudflare's own API).
 
+Note that `wrangler secret put` values are **runtime-only**. The build
+environment has its own separate variables — see
+[Edge configuration](#edge-configuration-cloudflare-dashboard).
+
 The two `CLOUDFLARE_*` values are for purging the edge cache after an admin write — see [Edge caching](#edge-caching). They are optional: if either is unset the purge is skipped silently and everything else still works, which is why local dev does not need them. Create the token under My Profile → API Tokens → Create Token → Custom token, with that single permission and Zone Resources limited to `metcalf.dev`. Do not use the Global API Key.
+
+---
+
+## Edge configuration (Cloudflare dashboard)
+
+None of this lives in the repo. It is zone configuration, recorded here because
+the app depends on it and nothing in the codebase reveals it — if the zone were
+ever rebuilt, this is what would have to be recreated.
+
+### The zone is shared — every rule needs a hostname predicate
+
+`wine.metcalf.dev` is a DNS record inside the `metcalf.dev` zone, not a zone of
+its own, and Cloudflare rules are scoped to the **zone**. An expression like
+`http.request.uri.path eq "/"` matches the portfolio at `metcalf.dev` exactly as
+readily as it matches the wine app.
+
+**Every rule below therefore carries `http.host eq "wine.metcalf.dev"`. Do not
+drop it.** A rate limit without it would throttle the portfolio; a cache rule
+without it would cache pages this repo does not own.
+
+### Caching → Cache Rules
+
+Evaluated top to bottom, so the bypass has to be first.
+
+| # | Rule | Expression | Then |
+|---|---|---|---|
+| 1 | Bypass cache for admin | `(http.host eq "wine.metcalf.dev" and starts_with(http.request.uri.path, "/admin"))` | Bypass cache |
+| 2 | Cache collection views | `(http.host eq "wine.metcalf.dev" and (http.request.uri.path eq "/" or http.request.uri.path eq "/api/wines"))` | Eligible for cache · Edge TTL *use cache-control header if present* · Browser TTL *respect origin* |
+
+Rule 2 leaves the **cache key at its default**, which includes the query string.
+That is load-bearing, not incidental — see [Edge caching](#edge-caching).
+
+### Security → WAF → Rate limiting rules
+
+One rule, which is all the free plan allows.
+
+`Throttle wine app browsing` — 20 requests / 10 seconds per **IP address**,
+action **Managed Challenge**, mitigation timeout 10 seconds:
+
+```
+(http.host eq "wine.metcalf.dev" and (http.request.uri.path eq "/" or starts_with(http.request.uri.path, "/api/")))
+```
+
+Managed Challenge rather than Block on purpose: a challenge is recoverable for a
+real person on a shared or mobile IP, a block is not.
+
+### Security → Bots, and the AI-crawler rule
+
+**Bot Fight Mode is on, and it is zone-wide** — there is no hostname filter, so
+it applies to `metcalf.dev` too. That is accepted: it only challenges traffic
+already scored as automated, so a static portfolio is barely affected. It *can*
+break non-browser access (curl, RSS tooling, uptime monitors) across the whole
+zone — if you ever point an uptime check at either hostname, add a WAF skip rule
+for it.
+
+**"Block AI Scrapers and Crawlers" is deliberately left off.** That toggle is
+also zone-wide and would cut AI crawlers off from the portfolio, which benefits
+from being found. A scoped WAF custom rule does the same job for the wine app
+only — **Security → WAF → Custom rules**, action **Block** (one of five allowed
+on the free plan):
+
+```
+(http.host eq "wine.metcalf.dev") and (http.user_agent contains "GPTBot" or http.user_agent contains "ClaudeBot" or http.user_agent contains "CCBot" or http.user_agent contains "Bytespider" or http.user_agent contains "PerplexityBot" or http.user_agent contains "meta-externalagent" or http.user_agent contains "Amazonbot" or http.user_agent contains "Applebot-Extended" or http.user_agent contains "Google-Extended")
+```
+
+`public/robots.txt` is already `Disallow: /`, so this changes nothing about
+intent — it enforces it against crawlers that ignore robots.txt, which are the
+ones that caused the problem. Being user-agent matching, it needs occasional
+maintenance: add to the list when a new crawler shows up in the logs.
+
+### Settings → Build
+
+Deploy commands and build variables, including why they are separate from
+runtime secrets, are documented under
+[Edge caching](#deploys-purge-too-but-two-pieces-of-dashboard-config-make-it-work).
+
+### Checking it still holds
+
+```bash
+# Wine app: first request MISS, second should be HIT
+curl -sI "https://wine.metcalf.dev/?country=France" | grep -i cf-cache-status
+curl -sI "https://wine.metcalf.dev/?country=France" | grep -i cf-cache-status
+
+# Admin must never cache — expect BYPASS (or DYNAMIC)
+curl -sI "https://wine.metcalf.dev/admin" | grep -i cf-cache-status
+
+# The portfolio must be untouched by any of these rules
+curl -sI "https://metcalf.dev/" | grep -i cf-cache-status
+```
+
+For whether it is actually working, the number that matters is **rows read** in
+**Workers & Pages → D1 → wine-db → Metrics**. Per collection view, roughly:
+
+| | Rows read |
+|---|---|
+| Before any of this | ~4,400 |
+| Indexed, warm isolate | ~12–24 |
+| Edge cache hit | 0 — never reaches the Worker |
 
 ---
 
@@ -142,7 +244,8 @@ An edge hit never invokes the Worker, so it never reaches D1 — this is what
 absorbs crawler traffic. The header comes from
 [lib/cache-control.ts](lib/cache-control.ts), used by both `next.config.ts` and
 the API route so the two cannot drift. It only has any effect because a Cache
-Rule marks those paths eligible; see [CLOUDFLARE.md](CLOUDFLARE.md).
+Rule marks those paths eligible; see
+[Edge configuration](#edge-configuration-cloudflare-dashboard).
 
 The TTL is an hour, which is safe because **it is not what bounds staleness**.
 The admin write actions call `purgeEdgeCache()`
@@ -253,3 +356,22 @@ npx wrangler secret list --name wine-app
 **D1 import fails with `BEGIN TRANSACTION` error** — D1 doesn't accept raw SQLite transaction syntax. Strip it: `grep -v "^BEGIN TRANSACTION;\|^COMMIT;\|^PRAGMA"`.
 
 **TypeScript errors on `env.wine_db`** — regenerate types: `npm run types`. If `D1Database` is still unknown, check that `cloudflare-env.d.ts` exists in the project root.
+
+**`cf-cache-status` is stuck on `BYPASS`** — Cloudflare will not cache a response
+carrying `Set-Cookie`. Check with
+`curl -sI "https://wine.metcalf.dev/" | grep -i set-cookie`. If something comes
+back, set the `Cache collection views` rule's Edge TTL to **Ignore cache-control
+header and use this TTL**, matching the `s-maxage` in
+[lib/cache-control.ts](lib/cache-control.ts); that caches anyway and strips the
+header. Safe here because `/` and `/api/wines` are anonymous public reads, and
+`/admin` never reaches this rule — the bypass rule above it matches first. **Do
+not generalise that setting to a path serving per-user content.**
+
+**`cf-cache-status` says `DYNAMIC`** — the request matched no eligible-for-cache
+rule at all. Check the hostname in the expression for a typo, and confirm the
+admin bypass is still ordered above the caching rule.
+
+**The page renders as a wall of JSON** — an RSC payload is being served to a
+browser navigation, which means the cache key stopped including the query string.
+Restore the default cache key on the `Cache collection views` rule. See
+[Edge caching](#edge-caching) for why.

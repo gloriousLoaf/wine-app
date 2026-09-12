@@ -29,7 +29,8 @@ const nextConfig: NextConfig = {
         // Let the Cloudflare edge serve the collection view so repeat traffic
         // never reaches the Worker (and therefore never reaches D1). This
         // header only matters once a Cache Rule enables HTML caching for the
-        // zone — Cloudflare does not cache HTML by default. See CLOUDFLARE.md.
+        // zone — Cloudflare does not cache HTML by default. The zone
+        // configuration this depends on is recorded in the README.
         source: '/',
         headers: [{ key: 'Cache-Control', value: COLLECTION_CACHE_CONTROL }],
       },

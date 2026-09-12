@@ -6,8 +6,8 @@ import { COLLECTION_CACHE_CONTROL } from '../../../lib/cache-control';
 /**
  * This is the layer that makes repeat traffic free: an edge hit never invokes
  * the Worker, so it never reaches D1. It only takes effect once a Cache Rule
- * exists for this path — Cloudflare does not cache /api/* by default. See
- * CLOUDFLARE.md.
+ * exists for this path — Cloudflare does not cache /api/* by default. The zone
+ * configuration this depends on is recorded in the README.
  */
 
 export async function GET(request: NextRequest) {

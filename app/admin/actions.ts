@@ -3,7 +3,7 @@
 import { getCloudflareContext } from '@opennextjs/cloudflare';
 import { getDb } from '../../lib/db';
 import { wines } from '../../lib/db/schema';
-import { getFilterMetadata, getWinesForEdit } from '../../lib/db/repo';
+import { getCollectionSnapshot, getWinesForEdit, refreshCollectionMeta } from '../../lib/db/repo';
 import { invalidateCollectionCache } from '../../lib/db/cache';
 import { revalidatePath } from 'next/cache';
 import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
@@ -115,6 +115,39 @@ async function purgeEdgeCache(): Promise<void> {
   }
 }
 
+/**
+ * Everything that has to happen after a wine is added, edited or deleted.
+ *
+ * Order is load-bearing:
+ *
+ * 1. Recompute `collection_meta`. The filter lists and bottle count live there
+ *    now, so until this runs the database itself still describes the old
+ *    collection.
+ * 2. Drop this isolate's cached copy, so the next read here sees the new row.
+ * 3. Purge the edge cache *last*. Purging before the refresh would let a
+ *    request racing in between repopulate the edge with stale metadata — the
+ *    exact thing the purge is meant to prevent.
+ *
+ * Nothing here can fail the write. The row is already committed by the time
+ * this runs, and reporting failure would invite the admin to retry — which for
+ * `addWine` means a duplicate bottle. A failure here costs staleness until the
+ * next successful write, so it is logged loudly instead.
+ */
+async function refreshDerivedState(): Promise<void> {
+  try {
+    await refreshCollectionMeta();
+  } catch (error) {
+    console.error(
+      'collection_meta refresh FAILED — the write succeeded, but filter lists ' +
+        'and the bottle count will be stale until the next successful write:',
+      error
+    );
+  }
+
+  invalidateCollectionCache();
+  await purgeEdgeCache();
+}
+
 const UNAUTHORIZED = { success: false as const, message: 'Unauthorized: Incorrect password' };
 
 /**
@@ -126,9 +159,9 @@ export async function loadWinesForEdit(formData: FormData) {
     if (!isAdmin(formData.get('password'))) return UNAUTHORIZED;
 
     const search = formData.get('search');
-    const [editableWines, filters] = await Promise.all([
+    const [editableWines, snapshot] = await Promise.all([
       getWinesForEdit(typeof search === 'string' ? search : undefined),
-      getFilterMetadata(),
+      getCollectionSnapshot(),
     ]);
 
     return {
@@ -143,8 +176,8 @@ export async function loadWinesForEdit(formData: FormData) {
         grape: wine.grape,
         datePosted: wine.datePosted,
       })),
-      countries: filters.countries,
-      grapes: filters.grapes,
+      countries: snapshot.countries,
+      grapes: snapshot.grapes,
     };
   } catch (error: unknown) {
     console.error('Failed to load wines for edit:', error);
@@ -188,8 +221,7 @@ export async function editWineMetadata(formData: FormData) {
       })
       .where(eq(wines.id, id));
 
-    invalidateCollectionCache();
-    await purgeEdgeCache();
+    await refreshDerivedState();
     revalidatePath('/');
     return { success: true };
   } catch (error: unknown) {
@@ -210,8 +242,7 @@ export async function deleteWine(formData: FormData) {
     // Hard delete from DB. (Images in R2 are kept as orphans for simplicity, or we could delete them if we stored the URL string. Leaving object deletion out to prevent accidental wipe of shared assets).
     await getDb().delete(wines).where(eq(wines.id, id));
 
-    invalidateCollectionCache();
-    await purgeEdgeCache();
+    await refreshDerivedState();
     revalidatePath('/');
     return { success: true };
   } catch (error: unknown) {
@@ -258,8 +289,7 @@ export async function addWine(formData: FormData) {
       isoCreatedAt: new Date().toISOString(),
     });
 
-    invalidateCollectionCache();
-    await purgeEdgeCache();
+    await refreshDerivedState();
     revalidatePath('/');
     return { success: true };
   } catch (error: unknown) {

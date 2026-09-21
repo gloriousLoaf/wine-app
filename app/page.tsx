@@ -1,4 +1,4 @@
-import { getWines, getFilterMetadata, getCollectionStats } from '../lib/db/repo';
+import { getWines, getCollectionSnapshot } from '../lib/db/repo';
 import { parseWineFilters, DEFAULT_PAGE_SIZE } from '../lib/query-params';
 import WineGrid from '../components/WineGrid';
 import FilterModule from '../components/FilterModule';
@@ -57,15 +57,14 @@ export default async function HomePage({
   // there is one less knob to turn from a crawler's address bar.
   const activeFilters = parseWineFilters(params);
 
-  // These three are independent; the two metadata queries are also cached, so
-  // on a warm isolate this is a single indexed 12-row read.
-  const [initialWines, filters, stats] = await Promise.all([
+  // The whole page is two reads: an indexed 12-row page of wines, plus a
+  // single-row primary-key lookup for everything derived about the collection.
+  const [initialWines, snapshot] = await Promise.all([
     getWines({ ...activeFilters, limit: DEFAULT_PAGE_SIZE }),
-    getFilterMetadata(),
-    getCollectionStats(),
+    getCollectionSnapshot(),
   ]);
 
-  const bottleStats = { earliest: stats.earliest, latest: stats.latest };
+  const bottleStats = { earliest: snapshot.earliest, latest: snapshot.latest };
 
   return (
     <main>
@@ -80,10 +79,10 @@ export default async function HomePage({
           )}
 
           <DashboardStats
-            totalWines={stats.total}
-            countries={filters.countries}
-            grapes={filters.grapes}
-            vintages={filters.vintages}
+            totalWines={snapshot.total}
+            countries={snapshot.countries}
+            grapes={snapshot.grapes}
+            vintages={snapshot.vintages}
             bottleStats={bottleStats}
           />
           <ActiveFilters />
@@ -93,7 +92,7 @@ export default async function HomePage({
 
       <WineGrid initialWines={initialWines} filters={activeFilters} />
 
-      <FilterModule filters={filters} currentFilters={activeFilters} />
+      <FilterModule filters={snapshot} currentFilters={activeFilters} />
     </main>
   );
 }

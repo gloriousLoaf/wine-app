@@ -2,17 +2,20 @@
  * A tiny in-isolate TTL cache for query results that are identical for every
  * visitor.
  *
- * The collection's filter lists, total count and date range only change when a
- * wine is added, edited or deleted from /admin — but they were being recomputed
- * from D1 on every single request, which is most of what was burning the daily
- * read quota.
+ * **Nothing depends on this for cost.** It is an opportunistic saving, no more.
  *
- * Scope and lifetime: this is module state inside a Workers isolate. It is not
- * shared across isolates or colos, and it disappears when an isolate is
- * recycled. That is fine for the job — the point is that a burst of requests
- * hitting one isolate resolves to one D1 query, not hundreds. Correctness is
- * bounded by TTL_MS: a write from /admin calls invalidate() to clear the isolate
- * that served it, and every other isolate catches up within one TTL window.
+ * It used to be the main defence against recomputing collection metadata per
+ * request, and that was a mistake worth recording: this is module state inside
+ * a Workers isolate, so it is not shared across isolates or colos and vanishes
+ * when one is recycled. Measured in production it hit approximately **zero**
+ * percent — at a few requests a minute, Workers evicts isolates between
+ * requests, so nearly every request arrived on a cold one. An in-isolate cache
+ * only pays off during a burst against a single colo, which is the opposite of
+ * steady low traffic.
+ *
+ * The metadata is now materialized in the `collection_meta` table instead, so
+ * a miss here costs a single-row primary-key lookup rather than ~3,900 rows.
+ * This layer just saves that lookup when it happens to be warm.
  *
  * Do not put per-visitor or per-filter data in here — it is unbounded-key
  * territory and a scraper could grow it without limit. Keys must come from a
@@ -22,8 +25,7 @@
 const TTL_MS = 5 * 60 * 1000;
 
 export const CACHE_KEYS = {
-  filterMetadata: 'filter-metadata',
-  collectionStats: 'collection-stats',
+  collectionSnapshot: 'collection-snapshot',
 } as const;
 
 type CacheKey = (typeof CACHE_KEYS)[keyof typeof CACHE_KEYS];

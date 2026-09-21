@@ -5,6 +5,44 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - Materialize the collection metadata
+
+Production metrics showed a page view still cost **~3,900 rows read** against a
+1,166-row table — barely better than the ~4,400 it started at. The indexes had
+worked (the wine list dropped to ~7 rows per call, `min`/`max` to 1 each);
+everything *around* the list had not.
+
+### Fixed
+- **The filter dropdowns were never cheap.** `SELECT DISTINCT <col> … WHERE
+  <col> > ''` on an indexed column produces `SEARCH wines USING COVERING INDEX
+  (col>?)`, which was read as a per-distinct-value seek. It is not — it seeks to
+  the start of the range and scans everything after, so the `> ''` bound was
+  only skipping NULLs. Measured per call: 576 rows for country, 1,011 for grape,
+  1,166 for vintage (`NOT NULL`, so a full scan). Those are exactly the non-NULL
+  row counts for each column. `count(*)` visits every row regardless.
+- **The isolate cache hit approximately zero percent.** It is module state
+  inside a Workers isolate, and at a few requests a minute isolates are evicted
+  between requests — so nearly every request arrived on a cold one. An
+  in-isolate cache only pays off during a burst against one colo, which is the
+  opposite of this traffic shape.
+
+### Added
+- `collection_meta`: a single-row table holding the filter values, bottle count
+  and date range, read with a primary-key lookup. **One row per page view
+  instead of ~3,900.** Migration `0002`.
+- `refreshCollectionMeta()`, called by the admin write actions before the edge
+  purge — purging first would let a racing request refill the edge with stale
+  metadata.
+- Compute-on-miss with write-back, which also covers the table not existing:
+  deploying this code before applying the migration degrades to the old cost
+  rather than returning 500s.
+
+### Changed
+- `getFilterMetadata()` and `getCollectionStats()` are replaced by a single
+  `getCollectionSnapshot()`, since both now come from the same row.
+- The isolate cache stays as an opportunistic saving, but nothing depends on it.
+  A miss now costs one row instead of ~3,900.
+
 ## [Unreleased] - Purge the edge cache on deploy
 
 ### Added

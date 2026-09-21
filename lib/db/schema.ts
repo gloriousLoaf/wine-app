@@ -30,3 +30,32 @@ export const wines = sqliteTable(
     index('idx_wines_vintage_date').on(table.vintage, table.datePosted),
   ]
 );
+
+/**
+ * A materialized snapshot of everything the UI needs *about* the collection,
+ * as opposed to the wines themselves: the filter dropdown values, the bottle
+ * count, and the date range.
+ *
+ * Exactly one row, id = 1 (enforced by a CHECK in the migration).
+ *
+ * This exists because none of those values can be derived cheaply. Measured
+ * against the live 1,166-row table, one page view cost ~3,900 rows read:
+ * `SELECT DISTINCT <col> ... WHERE <col> > ''` walks every non-NULL row (a
+ * `> ''` bound seeks past the NULLs and then scans), and `count(*)` visits
+ * every row regardless of indexing. Reading this row instead costs 1.
+ *
+ * Refreshed by the admin write actions. See `refreshCollectionMeta()`.
+ */
+export const collectionMeta = sqliteTable('collection_meta', {
+  id: integer('id').primaryKey(),
+  /** JSON array of strings, ascending. */
+  countries: text('countries').notNull(),
+  /** JSON array of strings, ascending. */
+  grapes: text('grapes').notNull(),
+  /** JSON array of strings, descending (newest vintage first). */
+  vintages: text('vintages').notNull(),
+  totalWines: integer('total_wines').notNull(),
+  earliest: text('earliest'),
+  latest: text('latest'),
+  updatedAt: text('updated_at').notNull(),
+});

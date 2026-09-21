@@ -1,5 +1,5 @@
 import { getDb } from './index';
-import { wines } from './schema';
+import { wines, collectionMeta } from './schema';
 import { desc, eq, and, or, gt, sql } from 'drizzle-orm';
 import type { AnySQLiteColumn } from 'drizzle-orm/sqlite-core';
 import { cached, CACHE_KEYS } from './cache';
@@ -90,48 +90,155 @@ async function distinctValues(column: AnySQLiteColumn): Promise<string[]> {
     .filter((value): value is string => Boolean(value));
 }
 
-export async function getFilterMetadata() {
-  return cached(CACHE_KEYS.filterMetadata, async () => {
-    const [countries, grapes, vintages] = await Promise.all([
-      distinctValues(wines.country),
-      distinctValues(wines.grape),
-      distinctValues(wines.vintage),
-    ]);
+export interface CollectionSnapshot {
+  countries: string[];
+  grapes: string[];
+  vintages: string[];
+  total: number;
+  earliest: string | null;
+  latest: string | null;
+}
 
-    return {
-      countries: countries.sort(),
-      grapes: grapes.sort(),
-      vintages: vintages.sort().reverse(),
-    };
+/**
+ * Derive the snapshot from the `wines` table. **Expensive — roughly 3,900 rows
+ * read against a 1,166-row table.** Only call this on an admin write, or once
+ * to populate `collection_meta` when it is empty.
+ *
+ * Every query here is irreducibly costly, which is the whole reason the result
+ * is materialized rather than computed per request:
+ *
+ * - `SELECT DISTINCT <col> WHERE <col> > ''` reads every non-NULL row. The
+ *   `> ''` bound seeks past the NULLs and then scans the rest; SQLite does not
+ *   skip between distinct values. Measured in production: 576 rows for country,
+ *   1,011 for grape, 1,166 for vintage (which is NOT NULL, so a full scan).
+ * - `count(*)` visits every row whatever the indexing.
+ *
+ * `min()` and `max()` are the exception — issued separately, each resolves to a
+ * single index seek. They are cheap and stay as they are.
+ */
+export async function computeCollectionSnapshot(): Promise<CollectionSnapshot> {
+  const db = getDb();
+
+  const [countries, grapes, vintages, countRows, earliestRows, latestRows] = await Promise.all([
+    distinctValues(wines.country),
+    distinctValues(wines.grape),
+    distinctValues(wines.vintage),
+    db.select({ value: sql<number>`count(*)` }).from(wines),
+    db.select({ value: sql<string | null>`min(${wines.datePosted})` }).from(wines),
+    db.select({ value: sql<string | null>`max(${wines.datePosted})` }).from(wines),
+  ]);
+
+  return {
+    countries: countries.sort(),
+    grapes: grapes.sort(),
+    vintages: vintages.sort().reverse(),
+    total: countRows[0]?.value ?? 0,
+    earliest: earliestRows[0]?.value ?? null,
+    latest: latestRows[0]?.value ?? null,
+  };
+}
+
+/** Tolerates a malformed or absent column rather than throwing on render. */
+function parseStringArray(raw: string | undefined): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((v): v is string => typeof v === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+async function writeCollectionMeta(snapshot: CollectionSnapshot): Promise<void> {
+  await getDb()
+    .insert(collectionMeta)
+    .values({
+      id: 1,
+      countries: JSON.stringify(snapshot.countries),
+      grapes: JSON.stringify(snapshot.grapes),
+      vintages: JSON.stringify(snapshot.vintages),
+      totalWines: snapshot.total,
+      earliest: snapshot.earliest,
+      latest: snapshot.latest,
+      updatedAt: new Date().toISOString(),
+    })
+    .onConflictDoUpdate({
+      target: collectionMeta.id,
+      set: {
+        countries: JSON.stringify(snapshot.countries),
+        grapes: JSON.stringify(snapshot.grapes),
+        vintages: JSON.stringify(snapshot.vintages),
+        totalWines: snapshot.total,
+        earliest: snapshot.earliest,
+        latest: snapshot.latest,
+        updatedAt: new Date().toISOString(),
+      },
+    });
+}
+
+/**
+ * The collection's filter values, bottle count and date range.
+ *
+ * Reads the materialized `collection_meta` row — a primary-key lookup, so **one
+ * row read** regardless of how big the collection gets. This is the query every
+ * page view makes, so it is the one that had to be cheap.
+ *
+ * If the row is missing (a fresh database, or before the migration's seed has
+ * run) it computes the snapshot and writes it back, so the expensive path is
+ * paid once rather than per request. A failed write-back is not fatal — the
+ * caller still gets correct data, it just costs again next time.
+ *
+ * The same fallback covers the table not existing at all, which makes deploy
+ * order safe: shipping this code before applying migration 0002 degrades to the
+ * old (expensive) behaviour instead of returning 500s for every page view.
+ */
+export async function getCollectionSnapshot(): Promise<CollectionSnapshot> {
+  return cached(CACHE_KEYS.collectionSnapshot, async () => {
+    let row: typeof collectionMeta.$inferSelect | undefined;
+
+    try {
+      const rows = await getDb()
+        .select()
+        .from(collectionMeta)
+        .where(eq(collectionMeta.id, 1))
+        .limit(1);
+      row = rows[0];
+    } catch (error) {
+      // Most likely `no such table` — migration 0002 has not been applied yet.
+      console.error('collection_meta unavailable, computing live instead:', error);
+    }
+
+    if (row) {
+      return {
+        countries: parseStringArray(row.countries),
+        grapes: parseStringArray(row.grapes),
+        vintages: parseStringArray(row.vintages),
+        total: row.totalWines,
+        earliest: row.earliest,
+        latest: row.latest,
+      };
+    }
+
+    const snapshot = await computeCollectionSnapshot();
+    try {
+      await writeCollectionMeta(snapshot);
+    } catch (error) {
+      console.error('Failed to seed collection_meta:', error);
+    }
+    return snapshot;
   });
 }
 
 /**
- * Total bottle count plus the date range of the collection.
+ * Recompute the snapshot and store it. Called by the admin write actions, which
+ * are the only thing that can change any of it.
  *
- * `min()` and `max()` are issued as separate statements on purpose: each one
- * alone resolves to a single index seek, whereas selecting both in one
- * statement forces SQLite to scan the whole index to compute them together.
- *
- * `count(*)` still has to walk the index and is the one query here that cannot
- * be made cheap — which is exactly why this result is cached.
+ * Must run *before* the edge cache is purged, so the purged cache refills from
+ * fresh data rather than from a request that raced in between.
  */
-export async function getCollectionStats() {
-  return cached(CACHE_KEYS.collectionStats, async () => {
-    const db = getDb();
-
-    const [countRows, earliestRows, latestRows] = await Promise.all([
-      db.select({ value: sql<number>`count(*)` }).from(wines),
-      db.select({ value: sql<string | null>`min(${wines.datePosted})` }).from(wines),
-      db.select({ value: sql<string | null>`max(${wines.datePosted})` }).from(wines),
-    ]);
-
-    return {
-      total: countRows[0]?.value ?? 0,
-      earliest: earliestRows[0]?.value ?? null,
-      latest: latestRows[0]?.value ?? null,
-    };
-  });
+export async function refreshCollectionMeta(): Promise<void> {
+  const snapshot = await computeCollectionSnapshot();
+  await writeCollectionMeta(snapshot);
 }
 
 export async function getWinesForEdit(search?: string) {

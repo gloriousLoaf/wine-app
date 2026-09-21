@@ -151,9 +151,14 @@ For whether it is actually working, the number that matters is **rows read** in
 
 | | Rows read |
 |---|---|
-| Before any of this | ~4,400 |
-| Indexed, warm isolate | ~12–24 |
+| Originally | ~4,400 |
+| Indexes only | ~3,900 — the wine list got cheap, the metadata around it did not |
+| Plus materialized metadata | ~8 |
 | Edge cache hit | 0 — never reaches the Worker |
+
+The middle row is the one worth remembering: indexing the list queries barely
+moved the total, because ~3,900 of the original 4,400 was the metadata. See
+[Collection metadata](#collection-metadata).
 
 ---
 
@@ -212,12 +217,8 @@ date_posted DESC LIMIT n` is an index seek with an early exit (~12 rows read)
 rather than a full scan plus a sort (~1,100 rows read, of which 1,088 are
 discarded).
 
-The filter dropdowns rely on a less obvious trick. `SELECT DISTINCT country FROM
-wines` scans the table, but adding `WHERE country > ''` gives SQLite a range
-bound on the indexed column and the plan becomes a distinct-value seek — one row
-read per distinct value instead of one per row. Same for `min()`/`max()`, which
-are single index seeks *only if* issued as separate statements; selecting both in
-one statement forces a scan.
+`min()` and `max()` are single index seeks *only if* issued as separate
+statements; selecting both in one statement forces a scan.
 
 Check a plan before adding a query:
 
@@ -229,13 +230,51 @@ npx wrangler d1 execute wine-db --remote \
 `SEARCH ... USING INDEX` is good. **`SCAN wines` means you are about to read the
 whole table on every request.**
 
-**2. Anything identical for all visitors must not be re-queried per request.**
-The filter lists, total count and date range change only when `/admin` writes.
-They go through the isolate-level TTL cache in [lib/db/cache.ts](lib/db/cache.ts),
-and the admin actions call `invalidateCollectionCache()` on write.
+**2. Anything that cannot be made cheap gets materialized, not cached.** The
+filter dropdown values, bottle count and date range live in the single-row
+`collection_meta` table, read with a primary-key lookup. See
+[Collection metadata](#collection-metadata).
 
 Untrusted paging input is clamped in [lib/query-params.ts](lib/query-params.ts) —
 without it, `?limit=1000000` is a full-table export.
+
+### Collection metadata
+
+Everything the UI shows *about* the collection — the filter dropdowns, the
+bottle count, the date range — is materialized into one row of
+`collection_meta` and read with a primary-key lookup. **One row per page view.**
+
+This is not premature. Deriving those values on read cost **~3,900 rows per page
+view** against a 1,166-row table, measured in production:
+
+| Query | Rows read per call |
+|---|---|
+| `SELECT DISTINCT country … WHERE country > ''` | 576 |
+| `SELECT DISTINCT grape … WHERE grape > ''` | 1,011 |
+| `SELECT DISTINCT vintage … WHERE vintage > ''` | 1,166 |
+| `SELECT count(*)` | 1,166 |
+
+None of that is fixable with indexing, and it is worth knowing why, because the
+plan output is misleading. `SELECT DISTINCT country … WHERE country > ''` on an
+indexed column produces `SEARCH wines USING COVERING INDEX (country>?)`, which
+*looks* like a per-distinct-value seek. It is not. It seeks to the start of the
+range and then **scans everything after it** — the `> ''` bound is only skipping
+the NULLs. The three numbers above are exactly the non-NULL row counts for each
+column (`vintage` is `NOT NULL`, hence a full scan). And `count(*)` has to visit
+every row regardless.
+
+An earlier version cached these per Workers isolate instead. That failed
+completely in production — see [lib/db/cache.ts](lib/db/cache.ts) for the
+post-mortem. Short version: at a few requests a minute, isolates are evicted
+between requests, so the cache hit rate was approximately zero. The isolate
+cache is still there, but nothing depends on it now.
+
+**Refreshing.** `refreshCollectionMeta()` recomputes and stores the row; the
+admin write actions call it before purging the edge cache, so the purged cache
+refills from fresh data. If the row is missing — or the table does not exist yet
+— the read falls back to computing live and writes the result back, which means
+deploying this code before applying migration `0002` degrades to the old cost
+rather than returning 500s.
 
 ### Edge caching
 
@@ -319,8 +358,8 @@ Schema lives in [lib/db/schema.ts](lib/db/schema.ts); SQL to apply lives in
 npx drizzle-kit generate
 
 # Apply — local first, then production
-npx wrangler d1 execute wine-db --file migrations/0001_add_indexes.sql
-npx wrangler d1 execute wine-db --file migrations/0001_add_indexes.sql --remote
+npx wrangler d1 execute wine-db --file migrations/0002_collection_meta.sql
+npx wrangler d1 execute wine-db --file migrations/0002_collection_meta.sql --remote
 ```
 
 ```bash

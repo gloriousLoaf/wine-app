@@ -5,6 +5,27 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] - Keep image requests off the Worker
+
+Cloudflare reported the Worker hitting the free plan's 10 ms CPU limit 1,000+
+times a day. Edge cache hits never reach the Worker, so the failures come from
+whatever still does.
+
+### Changed
+- **`next/image` is unoptimized.** Bottle images are already on R2's public CDN,
+  but every `<Image>` (two per card) was routed through `/_next/image`, a Worker
+  invocation. With no `IMAGES` binding, OpenNext just fetched the R2 original
+  and streamed it back unchanged. `<Image>` now renders the R2 URL directly, so
+  images never touch the Worker. The bytes the browser receives are the same.
+- Dropped `images.remotePatterns` / `minimumCacheTTL` and the build-time
+  `R2_PUBLIC_URL` read in `next.config.ts`. Both were only needed for the
+  optimizer. `R2_PUBLIC_URL` is still a runtime secret for uploads.
+
+### Added
+- **Workers Logs** (`observability` in `wrangler.jsonc`) so `exceededCpu`
+  outcomes can be broken down by path after the fact, not just via a live
+  `wrangler tail`. See README "Worker CPU budget".
+
 ## [Unreleased] - Materialize the collection metadata
 
 Production metrics showed a page view still cost **~3,900 rows read** against a

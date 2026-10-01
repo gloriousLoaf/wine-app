@@ -25,7 +25,7 @@ User request
 | Styling | Vanilla CSS Modules | Zero component libraries |
 | DNS | Cloudflare | Domain registrar + proxied DNS |
 
-The D1 binding is accessed per-request via `getCloudflareContext()` from `@opennextjs/cloudflare` — see [lib/db/index.ts](lib/db/index.ts). Images are served directly from R2's public CDN URL; uploads go through the admin server action via the S3-compatible R2 API.
+The D1 binding is accessed per-request via `getCloudflareContext()` from `@opennextjs/cloudflare` — see [lib/db/index.ts](lib/db/index.ts). Images are served directly from R2's public CDN URL — `next/image` runs with `unoptimized: true`, so image requests never touch the Worker; uploads go through the admin server action via the S3-compatible R2 API.
 
 Auto-deploys on push to `main`.
 
@@ -376,11 +376,37 @@ npx wrangler d1 execute wine-db --file wines-d1.sql --remote
 
 ---
 
+## Worker CPU budget
+
+The free plan caps each Worker invocation at **10 ms of CPU**; an invocation over
+it fails with `outcome: exceededCpu`. Edge cache hits never run the Worker, so
+only requests that get past the cache count.
+
+**Images do not go through the Worker.** `next.config.ts` sets
+`images.unoptimized: true`, so `<Image>` renders the R2 CDN URL as-is. Before
+that, every card image (two per card: grid and dialog) was a `/_next/image`
+invocation — and with no `IMAGES` binding, OpenNext could only fetch the R2
+original and stream it back unchanged. That was most of the Worker's request
+volume and bought nothing. Do not turn optimization back on without an `IMAGES`
+binding *and* a Cache Rule covering `/_next/image`.
+
+**Workers Logs is on** (`observability` in `wrangler.jsonc`, free plan: 200k
+events/day, 3-day retention). To find what is over budget: **Workers & Pages →
+wine-app → Logs**, filter `$workers.outcome = exceededCpu`, and group by path.
+Compare `$workers.cpuTimeMs` for `/`, `/?_rsc=…`, `/api/wines` and 404s.
+
+If what remains over 10 ms is SSR of `/` on cache misses, the page is already two
+small reads and twelve cards. The remaining cost is the Next.js/React runtime,
+and Workers Paid (which lifts the per-request CPU cap) is the fix rather than
+more engineering.
+
+---
+
 ## Debugging
 
 ```bash
-# Stream live logs from the production Worker
-npx wrangler tail --name wine-app
+# Stream live logs from the production Worker (JSON shows outcome per request)
+npx wrangler tail --name wine-app --format json
 
 # Check which secrets are set on the Worker
 npx wrangler secret list --name wine-app

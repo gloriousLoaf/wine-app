@@ -4,19 +4,14 @@ import { COLLECTION_CACHE_CONTROL } from "./lib/cache-control";
 
 initOpenNextCloudflareForDev();
 
-const remotePatterns: NonNullable<NextConfig['images']>['remotePatterns'] = [];
-
-if (process.env.R2_PUBLIC_URL) {
-  remotePatterns.push({
-    protocol: 'https',
-    hostname: new URL(process.env.R2_PUBLIC_URL).hostname,
-  });
-}
-
 const nextConfig: NextConfig = {
   images: {
-    remotePatterns,
-    minimumCacheTTL: 31536000,
+    // Bottle images already live on R2's public CDN, so <Image> points straight
+    // at them. Without this, every image request went through /_next/image —
+    // a Worker invocation that fetched the R2 original and streamed it back
+    // unchanged (there is no IMAGES binding to resize with), costing Worker
+    // CPU and request quota for nothing. See README "Worker CPU budget".
+    unoptimized: true,
   },
   experimental: {
     serverActions: {
